@@ -45,15 +45,28 @@ public actor MouseDevice {
     }
 
     /// `nil` means no usable answer (asleep, out of range, garbage); callers must not show 0%.
+    ///
+    /// Reads until `replyTimeout` has passed in total, so other HID reports on the same endpoint cannot be
+    /// mistaken for the answer. On the cable (not wireless) the answer echoes the command in byte 0
+    /// (`92 94 00 ...` seen on hardware), so any report whose byte 0 differs is discarded and the read goes on.
+    /// A dongle (wireless) model keeps the old behavior and decodes the first report: its reply layout is not
+    /// verified on hardware, and filtering it blindly could break a path that may work.
     public func readBattery() async throws -> BatteryReading? {
         try await exclusive {
             guard let battery = family.battery else { return nil }
             await connection.flushInput()
             try await send(Bytes.u8(battery.command), readback: 0)
-            guard let reply = try await connection.read(
-                length: max(battery.responseLength, 2), timeout: Self.replyTimeout
-            ) else { return nil }
-            return BatteryDecoder.decode(decoder: battery.decoder, reply: reply)
+            let echo: UInt8? = model.isWireless ? nil : battery.command.first.map(UInt8.init)
+            let deadline = ContinuousClock.now + Self.replyTimeout
+            while true {
+                let remaining = deadline - ContinuousClock.now
+                guard remaining > .zero else { return nil }
+                guard let reply = try await connection.read(
+                    length: max(battery.responseLength, 2), timeout: remaining
+                ) else { return nil }
+                if let echo, reply.first != echo { continue }
+                return BatteryDecoder.decode(decoder: battery.decoder, reply: reply)
+            }
         }
     }
 

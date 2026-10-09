@@ -4,6 +4,8 @@ import os
 /// In-memory HID connection used by tests and by the app's `--demo` mode.
 public actor SimulatedHIDConnection: HIDConnection {
     public typealias ReplyProvider = @Sendable ([UInt8]) -> [UInt8]?
+    /// Like `ReplyProvider` but may queue several reports for one write (e.g. a foreign report, then the real answer).
+    public typealias RepliesProvider = @Sendable ([UInt8]) -> [[UInt8]]
 
     public private(set) var writes: [[UInt8]] = []
     /// Operation order: "write", "read:<length>", "flush".
@@ -12,9 +14,15 @@ public actor SimulatedHIDConnection: HIDConnection {
     private var replies: [[UInt8]] = []
     private var failingWrites: Int
     private let replyProvider: ReplyProvider?
+    private let repliesProvider: RepliesProvider?
 
-    public init(replyProvider: ReplyProvider? = nil, failingWrites: Int = 0) {
+    public init(
+        replyProvider: ReplyProvider? = nil,
+        repliesProvider: RepliesProvider? = nil,
+        failingWrites: Int = 0
+    ) {
         self.replyProvider = replyProvider
+        self.repliesProvider = repliesProvider
         self.failingWrites = failingWrites
     }
 
@@ -31,6 +39,9 @@ public actor SimulatedHIDConnection: HIDConnection {
         writes.append(payload)
         if let reply = replyProvider?(payload) {
             replies.append(reply)
+        }
+        if let several = repliesProvider?(payload) {
+            replies.append(contentsOf: several)
         }
     }
 

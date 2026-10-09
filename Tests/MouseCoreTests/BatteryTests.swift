@@ -65,6 +65,16 @@ import Testing
         #expect(BatteryPresentation.detail(for: .disconnected, now: t0) == "No mouse connected")
     }
 
+    @Test func detailSaysAsleepForAMouseThatWasNeverRead() {
+        let state = BatteryState.connecting.applying(nil, at: t0).applying(nil, at: t0)
+        #expect(state.level == nil)
+        let text = BatteryPresentation.detail(for: state, now: t0)
+        #expect(text.contains("asleep"))
+        #expect(BatteryPresentation.detail(for: .connecting, now: t0) == "Reading battery…")   // one failure is not asleep yet
+        #expect(BatteryPresentation.compactTitle(for: state) == "…")
+        #expect(BatteryPresentation.symbolName(for: state) == "computermouse")
+    }
+
     @Test func monitorPollOnceReadsTheDeviceAndTracksFailures() async throws {
         let catalog = try ProfileCatalog.load()
         let match = try #require(catalog.match(vendorID: 0x1038, productID: 0x1848))

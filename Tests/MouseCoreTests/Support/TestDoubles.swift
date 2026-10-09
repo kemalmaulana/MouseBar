@@ -30,24 +30,31 @@ func waitUntil(_ condition: @Sendable () async -> Bool) async -> Bool {
     return false
 }
 
-/// Battery replies a Prime Wireless would send: 64 bytes, level code in byte 1.
+/// Battery replies a Prime Wireless would send: 64 bytes, byte 0 echoes the command, level code in byte 1
+/// (the wired layout seen on hardware: `92 94 00 ...`).
 func batteryReplyProvider(raw: UInt8) -> SimulatedHIDConnection.ReplyProvider {
     { payload in
         guard let first = payload.first, first == 0x92 || first == 0xD2 else { return nil }
-        return [0x00, raw] + [UInt8](repeating: 0, count: 62)
+        return [first, raw] + [UInt8](repeating: 0, count: 62)
     }
+}
+
+/// A 64-byte HID report with the given leading bytes.
+func report(_ head: [UInt8]) -> [UInt8] {
+    head + [UInt8](repeating: 0, count: 64 - head.count)
 }
 
 func makeDevice(
     familyID: String,
     productID: Int,
     replyProvider: SimulatedHIDConnection.ReplyProvider? = nil,
+    repliesProvider: SimulatedHIDConnection.RepliesProvider? = nil,
     failingWrites: Int = 0
 ) throws -> (MouseDevice, SimulatedHIDConnection, RecordingSleeper) {
     let sleeper = RecordingSleeper()
     let (device, connection) = try makeDevice(
         familyID: familyID, productID: productID, sleeper: sleeper,
-        replyProvider: replyProvider, failingWrites: failingWrites
+        replyProvider: replyProvider, repliesProvider: repliesProvider, failingWrites: failingWrites
     )
     return (device, connection, sleeper)
 }
@@ -58,12 +65,15 @@ func makeDevice(
     productID: Int,
     sleeper: some Sleeper,
     replyProvider: SimulatedHIDConnection.ReplyProvider? = nil,
+    repliesProvider: SimulatedHIDConnection.RepliesProvider? = nil,
     failingWrites: Int = 0
 ) throws -> (MouseDevice, SimulatedHIDConnection) {
     let catalog = try ProfileCatalog.load()
     let match = try #require(catalog.match(vendorID: 0x1038, productID: productID))
     #expect(match.family.id == familyID)
-    let connection = SimulatedHIDConnection(replyProvider: replyProvider, failingWrites: failingWrites)
+    let connection = SimulatedHIDConnection(
+        replyProvider: replyProvider, repliesProvider: repliesProvider, failingWrites: failingWrites
+    )
     let device = MouseDevice(
         family: match.family,
         model: match.model,

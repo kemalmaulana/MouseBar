@@ -85,6 +85,46 @@ import Testing
         #expect(await connection.writes == [[0x92]])
     }
 
+    // MARK: battery replies from other HID traffic (seen once on a cable while GG's engine ran)
+
+    @Test func wiredBatteryIgnoresAForeignReportAndReturnsTheRealReply() async throws {
+        let (device, connection, _) = try makeDevice(
+            familyID: "prime_wireless_wired", productID: 0x184A,
+            repliesProvider: { payload in
+                guard payload.first == 0x92 else { return [] }
+                return [report([0x21, 0x01]), report([0x92, 0x0B])]   // foreign report first, then the real answer
+            }
+        )
+        #expect(try await device.readBattery() == BatteryReading(level: 50, isCharging: false))
+        #expect(await connection.log == ["flush", "write", "read:2", "read:2"])
+    }
+
+    @Test func wiredBatteryIsNilWhenOnlyForeignReportsArrive() async throws {
+        let (device, _, _) = try makeDevice(
+            familyID: "prime_wireless_wired", productID: 0x184A,
+            repliesProvider: { _ in [report([0x21, 0x0B]), report([0x21, 0x00]), report([0x05, 0x95])] }
+        )
+        #expect(try await device.readBattery() == nil)
+    }
+
+    @Test func wiredBatteryRejectsAForeignReportWithAValidLookingLevelByte() async throws {
+        // Byte 1 = 0x01 would decode as 0%: the echo check is what keeps that out of the UI.
+        let (device, _, _) = try makeDevice(
+            familyID: "prime_wireless_wired", productID: 0x184A,
+            replyProvider: { _ in report([0x21, 0x01]) }
+        )
+        #expect(try await device.readBattery() == nil)
+    }
+
+    @Test func wirelessBatteryAcceptsTheFirstReportWithoutAnEchoCheck() async throws {
+        // The dongle's reply layout is not verified on hardware, so its first report is still decoded as before.
+        let (device, _, _) = try makeDevice(
+            familyID: "prime_wireless_wireless", productID: 0x1848,
+            replyProvider: { _ in report([0x00, 0x0B]) }
+        )
+        #expect(try await device.readBattery() == BatteryReading(level: 50, isCharging: false))
+    }
+
     @Test func batteryIsNilWhenTheMouseDoesNotAnswer() async throws {
         let (device, _, _) = try makeDevice(familyID: "prime_wireless_wireless", productID: 0x1848)
         #expect(try await device.readBattery() == nil)

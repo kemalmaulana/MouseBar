@@ -90,6 +90,8 @@ public enum BatteryPresentation {
 
     public static func detail(for state: BatteryState, now: Date) -> String {
         if state.freshness == .disconnected { return "No mouse connected" }
+        // A mouse that was asleep or out of range from the start never gets a level; do not say "Reading…" forever.
+        if state.freshness == .asleep && state.level == nil { return "Mouse asleep or out of range" }
         guard let level = state.level else { return "Reading battery…" }
         let charging = state.isCharging == true ? ", charging" : ""
         switch state.freshness {

@@ -12,6 +12,7 @@ public actor MouseSession {
     private var monitorTask: Task<Void, Never>?
     private var queued: [String: SettingValue] = [:]
     private var draining = false
+    private var lastFreshness: BatteryState.Freshness?
     private var onError: (@Sendable (String) async -> Void)?
 
     public init(
@@ -35,7 +36,7 @@ public actor MouseSession {
 
     public var currentValues: [String: SettingValue] { values }
 
-    /// Re-applies saved values (in profile order) and starts the battery loop.
+    /// Re-applies saved values (in profile order, except DPI presets) and starts the battery loop.
     /// Returns human-readable errors for values that could not be applied.
     public func start(
         onBattery: @escaping @Sendable (BatteryState) async -> Void,
@@ -46,6 +47,10 @@ public actor MouseSession {
         var errors: [String] = []
         for spec in mouse.family.settings {
             guard let value = values[spec.key] else { continue }
+            // DPI presets live in the mouse's own memory (saved by the debounced save) and the UI has no
+            // active-preset picker, so re-sending them would snap the active preset back to the first one
+            // on every connect, replug, or cable/dongle switch. The stored value stays untouched.
+            if spec.valueType == "multidpi_range_choice" { continue }
             do {
                 try validate(spec, value)
                 try await mouse.device.apply(spec.key, value)
@@ -54,7 +59,12 @@ public actor MouseSession {
             }
         }
         let monitor = self.monitor
-        monitorTask = Task { await monitor.run(onBattery) }
+        let forward = onBattery
+        let watched: @Sendable (BatteryState) async -> Void = { [weak self] state in
+            await self?.batteryChanged(to: state)
+            await forward(state)
+        }
+        monitorTask = Task { await monitor.run(watched) }
         return errors
     }
 
@@ -79,9 +89,14 @@ public actor MouseSession {
         Task { await self.drain() }
     }
 
+    /// Returns once no submitted edit is pending, or as soon as the calling task is cancelled.
     public func waitUntilIdle() async {
         while draining || !queued.isEmpty {
-            try? await Task.sleep(for: .milliseconds(1))
+            do {
+                try await Task.sleep(for: .milliseconds(1))
+            } catch {
+                return
+            }
         }
     }
 
@@ -111,6 +126,24 @@ public actor MouseSession {
     private func validate(_ spec: SettingSpec, _ value: SettingValue) throws {
         if case .buttons(let mapping) = value {
             try encoder.validateButtons(mapping, spec: spec)
+        }
+    }
+
+    /// A dongle stays enumerated while the mouse powers off and on, so no hotplug event runs `start` again.
+    /// Settings the mouse does not keep itself (LED color) would stay at its startup lighting, so when a
+    /// sleeping mouse answers again they are sent once more. Saved settings are not touched: the mouse keeps them.
+    private func batteryChanged(to state: BatteryState) async {
+        let previous = lastFreshness
+        lastFreshness = state.freshness
+        guard previous == .asleep && state.freshness == .fresh else { return }
+        for spec in mouse.family.settings where !spec.persistsOnDevice {
+            guard let value = values[spec.key] else { continue }
+            do {
+                try validate(spec, value)
+                try await mouse.device.apply(spec.key, value)
+            } catch {
+                await onError?("\(spec.label): \(error)")
+            }
         }
     }
 
