@@ -1,0 +1,653 @@
+{
+ "rivalcfgVersion": "4.17.0",
+ "families": {
+  "prime_wireless_wired": {
+   "settings": [
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       400,
+       800,
+       1200,
+       2400,
+       3200
+      ],
+      "selected": null
+     },
+     "hex": "2d050004090d1b26"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       800
+      ],
+      "selected": null
+     },
+     "hex": "2d010009"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       100,
+       18000
+      ],
+      "selected": null
+     },
+     "hex": "2d020000d6"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       400,
+       800,
+       1200
+      ],
+      "selected": 1
+     },
+     "hex": "2d030104090d"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       150,
+       17999
+      ],
+      "selected": null
+     },
+     "hex": "2d020000d6"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "1000"
+     },
+     "hex": "2b00"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "500"
+     },
+     "hex": "2b01"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "250"
+     },
+     "hex": "2b02"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "125"
+     },
+     "hex": "2b03"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 255,
+      "g": 128,
+      "b": 0
+     },
+     "hex": "210100ff8000"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 255,
+      "g": 0,
+      "b": 0
+     },
+     "hex": "210100ff0000"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 0,
+      "g": 255,
+      "b": 0
+     },
+     "hex": "21010000ff00"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 5
+     },
+     "hex": "29e09304"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 0
+     },
+     "hex": "29000000"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 20
+     },
+     "hex": "29804f12"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 25
+     },
+     "hex": "29804f12"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 30
+     },
+     "hex": "230f010000307500"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 0
+     },
+     "hex": "230f010000000000"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 1200
+     },
+     "hex": "230f010000804f12"
+    },
+    {
+     "setting": "default_lighting",
+     "value": {
+      "type": "choice",
+      "value": "off"
+     },
+     "hex": "2700"
+    },
+    {
+     "setting": "default_lighting",
+     "value": {
+      "type": "choice",
+      "value": "rainbow"
+     },
+     "hex": "2701"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {}
+     },
+     "hex": "2a01000000000200000000030000000004000000000500000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button1": "button2",
+       "button2": "button1"
+      }
+     },
+     "hex": "2a02000000000100000000030000000004000000000500000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button6": "PlayPause",
+       "button4": "VolumeUp"
+      }
+     },
+     "hex": "2a01000000000200000000030000000061e9000000050000000061cd00000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button5": "disabled",
+       "button3": "a"
+      }
+     },
+     "hex": "2a01000000000200000000510400000004000000000000000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button4": "vol+",
+       "button5": "prev"
+      }
+     },
+     "hex": "2a01000000000200000000030000000061e900000061b6000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "scrolldown": "scrollup"
+      }
+     },
+     "hex": "2a01000000000200000000030000000004000000000500000000300000000031000000003100000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button4": "dpi"
+      }
+     },
+     "hex": "2a01000000000200000000030000000030000000000500000000300000000031000000003200000000"
+    }
+   ],
+   "saveHex": "1100",
+   "batteryQueryHex": "92",
+   "battery": [
+    {
+     "reply": "0015",
+     "expected": {
+      "level": 100,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0095",
+     "expected": {
+      "level": 100,
+      "isCharging": true
+     }
+    },
+    {
+     "reply": "000b",
+     "expected": {
+      "level": 50,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0002",
+     "expected": {
+      "level": 5,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0001",
+     "expected": {
+      "level": 0,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0000",
+     "expected": null
+    },
+    {
+     "reply": "0016",
+     "expected": null
+    },
+    {
+     "reply": "00",
+     "expected": null
+    }
+   ]
+  },
+  "prime_wireless_wireless": {
+   "settings": [
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       400,
+       800,
+       1200,
+       2400,
+       3200
+      ],
+      "selected": null
+     },
+     "hex": "6d050004090d1b26"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       800
+      ],
+      "selected": null
+     },
+     "hex": "6d010009"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       100,
+       18000
+      ],
+      "selected": null
+     },
+     "hex": "6d020000d6"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       400,
+       800,
+       1200
+      ],
+      "selected": 1
+     },
+     "hex": "6d030104090d"
+    },
+    {
+     "setting": "sensitivity",
+     "value": {
+      "type": "dpi",
+      "presets": [
+       150,
+       17999
+      ],
+      "selected": null
+     },
+     "hex": "6d020000d6"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "1000"
+     },
+     "hex": "6b00"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "500"
+     },
+     "hex": "6b01"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "250"
+     },
+     "hex": "6b02"
+    },
+    {
+     "setting": "polling_rate",
+     "value": {
+      "type": "choice",
+      "value": "125"
+     },
+     "hex": "6b03"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 255,
+      "g": 128,
+      "b": 0
+     },
+     "hex": "610100ff8000"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 255,
+      "g": 0,
+      "b": 0
+     },
+     "hex": "610100ff0000"
+    },
+    {
+     "setting": "color",
+     "value": {
+      "type": "color",
+      "r": 0,
+      "g": 255,
+      "b": 0
+     },
+     "hex": "61010000ff00"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 5
+     },
+     "hex": "69e09304"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 0
+     },
+     "hex": "69000000"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 20
+     },
+     "hex": "69804f12"
+    },
+    {
+     "setting": "sleep_timer",
+     "value": {
+      "type": "int",
+      "value": 25
+     },
+     "hex": "69804f12"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 30
+     },
+     "hex": "630f010000307500"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 0
+     },
+     "hex": "630f010000000000"
+    },
+    {
+     "setting": "dim_timer",
+     "value": {
+      "type": "int",
+      "value": 1200
+     },
+     "hex": "630f010000804f12"
+    },
+    {
+     "setting": "default_lighting",
+     "value": {
+      "type": "choice",
+      "value": "off"
+     },
+     "hex": "6700"
+    },
+    {
+     "setting": "default_lighting",
+     "value": {
+      "type": "choice",
+      "value": "rainbow"
+     },
+     "hex": "6701"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {}
+     },
+     "hex": "6a01000000000200000000030000000004000000000500000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button1": "button2",
+       "button2": "button1"
+      }
+     },
+     "hex": "6a02000000000100000000030000000004000000000500000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button6": "PlayPause",
+       "button4": "VolumeUp"
+      }
+     },
+     "hex": "6a01000000000200000000030000000061e9000000050000000061cd00000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button5": "disabled",
+       "button3": "a"
+      }
+     },
+     "hex": "6a01000000000200000000510400000004000000000000000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button4": "vol+",
+       "button5": "prev"
+      }
+     },
+     "hex": "6a01000000000200000000030000000061e900000061b6000000300000000031000000003200000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "scrolldown": "scrollup"
+      }
+     },
+     "hex": "6a01000000000200000000030000000004000000000500000000300000000031000000003100000000"
+    },
+    {
+     "setting": "buttons_mapping",
+     "value": {
+      "type": "buttons",
+      "assignments": {
+       "button4": "dpi"
+      }
+     },
+     "hex": "6a01000000000200000000030000000030000000000500000000300000000031000000003200000000"
+    }
+   ],
+   "saveHex": "5100",
+   "batteryQueryHex": "d2",
+   "battery": [
+    {
+     "reply": "0015",
+     "expected": {
+      "level": 100,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0095",
+     "expected": {
+      "level": 100,
+      "isCharging": true
+     }
+    },
+    {
+     "reply": "000b",
+     "expected": {
+      "level": 50,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0002",
+     "expected": {
+      "level": 5,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0001",
+     "expected": {
+      "level": 0,
+      "isCharging": false
+     }
+    },
+    {
+     "reply": "0000",
+     "expected": null
+    },
+    {
+     "reply": "0016",
+     "expected": null
+    },
+    {
+     "reply": "00",
+     "expected": null
+    }
+   ]
+  }
+ }
+}

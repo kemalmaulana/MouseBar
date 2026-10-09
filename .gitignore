@@ -1,0 +1,6 @@
+.build/
+.venv/
+build/
+*.xcuserstate
+.DS_Store
+.swiftpm/
