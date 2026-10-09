@@ -1,3 +1,4 @@
+import os
 import Testing
 @testable import MouseCore
 
@@ -101,5 +102,67 @@ import Testing
         let (device, connection, _) = try makeDevice(familyID: "prime_wireless_wired", productID: 0x184A)
         await device.close()
         #expect(await connection.isClosed)
+    }
+
+    @Test func concurrentAppliesAreSerializedAndPaced() async throws {
+        let sleeper = ManualSleeper()
+        let (device, connection) = try makeDevice(
+            familyID: "prime_wireless_wired", productID: 0x184A, sleeper: sleeper
+        )
+        let finished = OSAllocatedUnfairLock(initialState: 0)
+
+        let a = Task {
+            try await device.apply("polling_rate", .choice("500"))
+            finished.withLock { $0 += 1 }
+        }
+        #expect(await waitUntil { await sleeper.waiterCount == 1 })   // A wrote and is in its 50 ms pause
+        let b = Task {
+            try await device.apply("polling_rate", .choice("250"))
+            finished.withLock { $0 += 1 }
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await connection.writes == [[0x2B, 0x01]])            // B must still be waiting for A
+
+        let done = await waitUntil {
+            await sleeper.releaseAll()
+            return finished.withLock { $0 } == 2
+        }
+        await sleeper.releaseAll()
+        #expect(done)
+        try await a.value
+        try await b.value
+        #expect(await connection.writes == [[0x2B, 0x01], [0x2B, 0x02]])
+    }
+
+    @Test func aBatteryQueryStaysContiguousWhileAnotherCommandIsPending() async throws {
+        let sleeper = ManualSleeper()
+        let (device, connection) = try makeDevice(
+            familyID: "prime_wireless_wireless", productID: 0x1848, sleeper: sleeper,
+            replyProvider: batteryReplyProvider(raw: 0x95)
+        )
+        let finished = OSAllocatedUnfairLock(initialState: 0)
+
+        let battery = Task { () -> BatteryReading? in
+            let reading = try await device.readBattery()
+            finished.withLock { $0 += 1 }
+            return reading
+        }
+        #expect(await waitUntil { await sleeper.waiterCount == 1 })   // battery flushed, wrote, now pausing
+        let apply = Task {
+            try await device.apply("polling_rate", .choice("500"))
+            finished.withLock { $0 += 1 }
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await connection.log == ["flush", "write"])           // apply must not slip in before the reply read
+
+        let done = await waitUntil {
+            await sleeper.releaseAll()
+            return finished.withLock { $0 } == 2
+        }
+        await sleeper.releaseAll()
+        #expect(done)
+        #expect(try await battery.value == BatteryReading(level: 100, isCharging: true))
+        try await apply.value
+        #expect(await connection.log == ["flush", "write", "read:2", "write", "read:64"])
     }
 }

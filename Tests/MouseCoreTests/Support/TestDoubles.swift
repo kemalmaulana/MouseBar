@@ -44,11 +44,26 @@ func makeDevice(
     replyProvider: SimulatedHIDConnection.ReplyProvider? = nil,
     failingWrites: Int = 0
 ) throws -> (MouseDevice, SimulatedHIDConnection, RecordingSleeper) {
+    let sleeper = RecordingSleeper()
+    let (device, connection) = try makeDevice(
+        familyID: familyID, productID: productID, sleeper: sleeper,
+        replyProvider: replyProvider, failingWrites: failingWrites
+    )
+    return (device, connection, sleeper)
+}
+
+/// Same as above with a caller-supplied sleeper (e.g. `ManualSleeper`).
+func makeDevice(
+    familyID: String,
+    productID: Int,
+    sleeper: some Sleeper,
+    replyProvider: SimulatedHIDConnection.ReplyProvider? = nil,
+    failingWrites: Int = 0
+) throws -> (MouseDevice, SimulatedHIDConnection) {
     let catalog = try ProfileCatalog.load()
     let match = try #require(catalog.match(vendorID: 0x1038, productID: productID))
     #expect(match.family.id == familyID)
     let connection = SimulatedHIDConnection(replyProvider: replyProvider, failingWrites: failingWrites)
-    let sleeper = RecordingSleeper()
     let device = MouseDevice(
         family: match.family,
         model: match.model,
@@ -56,5 +71,5 @@ func makeDevice(
         encoder: SettingEncoder(layouts: try ButtonLayouts.load()),
         sleeper: sleeper
     )
-    return (device, connection, sleeper)
+    return (device, connection)
 }
