@@ -102,9 +102,70 @@ public struct SettingEncoder: Sendable {
         return out
     }
 
-    // MARK: Added by Task 5
+    // MARK: buttons
+
+    /// Each physical button with the action it ends up with (lowercased token), in profile order.
+    func resolvedActions(spec: SettingSpec, mapping: ButtonMapping) throws -> [(button: ButtonSpec, action: String)] {
+        guard let buttons = spec.buttons else {
+            throw MouseCoreError.invalidValue("\(spec.key): profile has no buttons")
+        }
+        let known = Set(buttons.map { $0.name.lowercased() })
+        for name in mapping.assignments.keys where !known.contains(name) {
+            throw MouseCoreError.invalidValue("This mouse has no button named '\(name)'")
+        }
+        return buttons.map { button in
+            let requested = mapping.assignments[button.name.lowercased()]
+            let action = (requested == nil || requested == "default") ? button.defaultAction : requested!
+            return (button, action.lowercased())
+        }
+    }
 
     private func buttonBytes(_ spec: SettingSpec, _ mapping: ButtonMapping) throws -> [UInt8] {
-        throw MouseCoreError.unsupportedValueType(spec.valueType)
+        guard let buttons = spec.buttons, let fieldLength = spec.buttonFieldLength else {
+            throw MouseCoreError.invalidValue("\(spec.key): profile is missing button parameters")
+        }
+        let byName = Dictionary(buttons.map { ($0.name.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        var specials: [String: Int] = [:]
+        if let v = spec.buttonDisable { specials["disable"] = v; specials["disabled"] = v }
+        if let v = spec.buttonDpiSwitch { specials["dpi"] = v }
+        if let v = spec.buttonScrollUp { specials["scrollup"] = v }
+        if let v = spec.buttonScrollDown {
+            specials["scrolldown"] = v; specials["scrolldwn"] = v; specials["scrolldn"] = v
+        }
+
+        var packet = [UInt8](repeating: 0, count: buttons.count * fieldLength)
+        for (button, action) in try resolvedActions(spec: spec, mapping: mapping) {
+            let at = button.offset
+            guard at + 1 < packet.count else {
+                throw MouseCoreError.invalidValue("\(spec.key): button offset out of packet")
+            }
+            // Same precedence as rivalcfg: mouse button, special action, media key, keyboard key.
+            if let target = byName[action] {
+                packet[at] = UInt8(truncatingIfNeeded: target.id)
+            } else if let code = specials[action] {
+                packet[at] = UInt8(truncatingIfNeeded: code)
+            } else if let prefix = spec.buttonMultimedia, let code = layouts.multimedia[action] {
+                packet[at] = UInt8(truncatingIfNeeded: prefix)
+                packet[at + 1] = UInt8(truncatingIfNeeded: code)
+            } else if let prefix = spec.buttonKeyboard, let code = layouts.keyboard[action] {
+                packet[at] = UInt8(truncatingIfNeeded: prefix)
+                packet[at + 1] = UInt8(truncatingIfNeeded: code)
+            } else {
+                throw MouseCoreError.invalidValue("Unknown button, key or action '\(action)'")
+            }
+        }
+        return packet
+    }
+
+    /// Rejects mappings after which no physical button produces the primary click (`button1`).
+    /// rivalcfg warns: "keep button1 mapped to a working button, or you won't be able to click".
+    public func validateButtons(_ mapping: ButtonMapping, spec: SettingSpec) throws {
+        guard let primary = spec.buttons?.first?.name.lowercased() else {
+            throw MouseCoreError.invalidValue("\(spec.key): profile has no buttons")
+        }
+        let actions = try resolvedActions(spec: spec, mapping: mapping)
+        guard actions.contains(where: { $0.action == primary }) else {
+            throw MouseCoreError.noPrimaryClick
+        }
     }
 }
