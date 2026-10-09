@@ -63,8 +63,8 @@ struct RangeRow: View {
         .onAppear {
             if case .int(let v)? = current(spec, model) { draft = Double(v) }
         }
-        .onChange(of: model.values[spec.key]) { _, new in
-            if case .int(let v)? = new { draft = Double(v) }
+        .onChange(of: model.values[spec.key]) { _, _ in
+            if case .int(let v)? = current(spec, model) { draft = Double(v) }
         }
     }
 }
@@ -113,14 +113,15 @@ struct DPIRow: View {
     var body: some View {
         ForEach(presets.indices, id: \.self) { index in
             Stepper(value: Binding(
-                get: { presets[index] },
+                get: { presets.indices.contains(index) ? presets[index] : range.lowerBound },
                 set: { value in
+                    guard presets.indices.contains(index) else { return }
                     var next = presets
                     next[index] = value
                     commit(next, selected: selected)
                 }
             ), in: range, step: step) {
-                Text("Preset \(index + 1): \(presets[index]) DPI")
+                Text("Preset \(index + 1): \(presets.indices.contains(index) ? presets[index] : range.lowerBound) DPI")
             }
         }
         HStack {

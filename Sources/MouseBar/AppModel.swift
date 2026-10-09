@@ -111,9 +111,18 @@ final class AppModel {
     }
 
     func submit(_ key: String, _ value: SettingValue) {
+        problem = nil
+        // Optimistic, so controls respond at once; resynced below if the session rejects the edit.
         values[key] = value
-        guard let session else { return }
-        Task { await session.submit(key, value) }
+        guard let session, let id = activeID else { return }
+        Task {
+            await session.submit(key, value)
+            await session.waitUntilIdle()
+            let accepted = await session.currentValues[key]
+            // Only this key, so in-flight edits to other keys are not reverted.
+            guard id == activeID else { return }
+            values[key] = accepted
+        }
     }
 
     func resetAll() {

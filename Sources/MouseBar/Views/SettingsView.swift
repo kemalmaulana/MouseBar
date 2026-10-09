@@ -7,14 +7,18 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            if let problem = model.problem {
+                Section {
+                    Text(problem)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if let family = model.family {
                 ForEach(family.settings) { spec in
                     SettingRow(spec: spec, model: model)
                 }
                 Section {
-                    if let problem = model.problem {
-                        Text(problem).foregroundStyle(.red)
-                    }
                     Button("Reset to factory defaults", role: .destructive) { confirmReset = true }
                 }
             } else {
@@ -23,7 +27,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540)
+        .frame(minWidth: 540, maxWidth: 540, minHeight: 300, idealHeight: 640, maxHeight: .infinity)
         .confirmationDialog("Reset every setting to the factory default?", isPresented: $confirmReset) {
             Button("Reset", role: .destructive) { model.resetAll() }
         }
