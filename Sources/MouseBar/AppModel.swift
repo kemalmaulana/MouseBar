@@ -16,7 +16,7 @@ final class AppModel {
     let layouts: ButtonLayouts
 
     private let catalog: ProfileCatalog
-    private let store = SettingsStore(directory: SettingsStore.defaultDirectory())
+    private let store: SettingsStore
     private var manager: DeviceManager?
     private var session: MouseSession?
     private var activeID: UInt64?
@@ -27,6 +27,13 @@ final class AppModel {
         // Generated and unit-tested data; failing to decode it is a programming error.
         catalog = try! ProfileCatalog.load()
         layouts = try! ButtonLayouts.load()
+        // Demo edits must never reach the real store: the demo device shares the real mouse's group id,
+        // so they would be re-applied to the real mouse on the next normal launch.
+        let directory = CommandLine.arguments.contains("--demo")
+            ? FileManager.default.temporaryDirectory
+                .appendingPathComponent("mousebar-demo-\(UUID().uuidString)", isDirectory: true)
+            : SettingsStore.defaultDirectory()
+        store = SettingsStore(directory: directory)
     }
 
     func start() {
@@ -83,16 +90,25 @@ final class AppModel {
             mouse: chosen, store: store, encoder: SettingEncoder(layouts: layouts), sleeper: SystemSleeper()
         )
         self.session = session
+        let id = chosen.hidID
         let errors = await session.start(
-            onBattery: { [weak self] state in await self?.setBattery(state) },
-            onError: { [weak self] message in await self?.setProblem(message) }
+            onBattery: { [weak self] state in await self?.setBattery(state, from: id) },
+            onError: { [weak self] message in await self?.setProblem(message, from: id) }
         )
         values = await session.currentValues
         if !errors.isEmpty { problem = errors.joined(separator: "\n") }
     }
 
-    private func setBattery(_ state: BatteryState) { battery = state }
-    private func setProblem(_ message: String) { problem = message }
+    // A stopped session can still deliver an already-queued callback; only the active mouse may update the UI.
+    private func setBattery(_ state: BatteryState, from id: UInt64) {
+        guard id == activeID else { return }
+        battery = state
+    }
+
+    private func setProblem(_ message: String, from id: UInt64) {
+        guard id == activeID else { return }
+        problem = message
+    }
 
     func submit(_ key: String, _ value: SettingValue) {
         values[key] = value
