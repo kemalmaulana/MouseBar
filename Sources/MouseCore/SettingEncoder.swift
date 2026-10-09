@@ -69,11 +69,40 @@ public struct SettingEncoder: Sendable {
         return try Bytes.littleEndian(output[0] + index * output[2], length: spec.rangeLengthByte ?? 1)
     }
 
-    // MARK: Added by Tasks 4 and 5
+    // MARK: multidpi_range_choice
 
     private func dpiBytes(_ spec: SettingSpec, presets: [Int], selected: Int?) throws -> [UInt8] {
-        throw MouseCoreError.unsupportedValueType(spec.valueType)
+        guard let table = spec.outputChoices, let first = spec.firstPreset,
+              let maxCount = spec.maxPresetCount, let codeLength = spec.dpiLengthByte
+        else { throw MouseCoreError.invalidValue("\(spec.key): profile is missing DPI parameters") }
+        guard !presets.isEmpty else {
+            throw MouseCoreError.invalidValue("you must provide at least one preset")
+        }
+        guard presets.count <= maxCount else {
+            throw MouseCoreError.invalidValue(
+                "you provided \(presets.count) presets but the device accepts a maximum of \(maxCount)"
+            )
+        }
+        let selectedPreset = first + (selected ?? 0)
+        guard selectedPreset >= first, selectedPreset < presets.count + first else {
+            throw MouseCoreError.invalidValue("the selected preset is out of range")
+        }
+        let sorted = table.compactMap { $0.count == 2 ? (dpi: $0[0], code: $0[1]) : nil }.sorted { $0.dpi < $1.dpi }
+        guard !sorted.isEmpty else { throw MouseCoreError.invalidValue("\(spec.key): empty DPI table") }
+
+        var out: [UInt8] = [UInt8(truncatingIfNeeded: presets.count), UInt8(truncatingIfNeeded: selectedPreset)]
+        for dpi in presets {
+            // rivalcfg find_nearest_choice: ascending scan, strict '<', so ties pick the lower DPI.
+            var best = sorted[0]
+            for entry in sorted where abs(entry.dpi - dpi) < abs(best.dpi - dpi) {
+                best = entry
+            }
+            out += try Bytes.littleEndian(best.code, length: codeLength)
+        }
+        return out
     }
+
+    // MARK: Added by Task 5
 
     private func buttonBytes(_ spec: SettingSpec, _ mapping: ButtonMapping) throws -> [UInt8] {
         throw MouseCoreError.unsupportedValueType(spec.valueType)
