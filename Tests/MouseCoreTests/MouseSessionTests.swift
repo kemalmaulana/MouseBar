@@ -51,6 +51,21 @@ import Testing
         await rig.finish(sleepers: 1)
     }
 
+    @Test func startSkipsAStoredButtonMappingWithoutLeftClickAndReportsIt() async throws {
+        let rig = try await makeRig()
+        let bad = SettingValue.buttons(ButtonMapping(assignments: ["button1": "disabled"]))
+        try await rig.store.set(bad, key: "buttons_mapping", mouse: "prime_mini_wireless")
+        try await rig.store.set(.choice("500"), key: "polling_rate", mouse: "prime_mini_wireless")
+        let errors = await rig.session.start(onBattery: { _ in }, onError: { _ in })
+        #expect(errors.count == 1)
+        #expect(errors.first?.contains("Buttons mapping") == true)
+        let writes = await rig.connection.writes.filter { $0.first != 0x92 }
+        #expect(!writes.contains { $0.first == 0x2A })               // nothing reached the buttons command
+        #expect(writes.contains([0x2B, 0x01]))                       // the valid value was still applied
+        #expect(await rig.store.values(for: "prime_mini_wireless")["buttons_mapping"] == bad)   // kept for the UI to fix
+        await rig.finish(sleepers: 1)                                // the battery loop still started
+    }
+
     @Test func startReportsBatteryThroughTheCallback() async throws {
         let rig = try await makeRig()
         let box = StateBox()

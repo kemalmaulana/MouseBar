@@ -47,6 +47,7 @@ public actor MouseSession {
         for spec in mouse.family.settings {
             guard let value = values[spec.key] else { continue }
             do {
+                try validate(spec, value)
                 try await mouse.device.apply(spec.key, value)
             } catch {
                 errors.append("\(spec.label): \(error)")
@@ -61,9 +62,7 @@ public actor MouseSession {
     /// Order matters: an invalid value must never reach the device or the store.
     public func set(_ key: String, _ value: SettingValue) async throws {
         guard let spec = mouse.family.setting(key) else { throw MouseCoreError.unknownSetting(key) }
-        if case .buttons(let mapping) = value {
-            try encoder.validateButtons(mapping, spec: spec)
-        }
+        try validate(spec, value)
         try await mouse.device.apply(key, value)
         values[key] = value
         try await store.set(value, key: key, mouse: mouse.model.mouse)
@@ -105,6 +104,14 @@ public actor MouseSession {
     public func stop() {
         monitorTask?.cancel()
         monitorTask = nil
+    }
+
+    /// Rejects values that must never reach the device (a button remap with no left click).
+    /// Used for edits and for saved values re-applied on connect, so a corrupt settings file cannot reach the mouse.
+    private func validate(_ spec: SettingSpec, _ value: SettingValue) throws {
+        if case .buttons(let mapping) = value {
+            try encoder.validateButtons(mapping, spec: spec)
+        }
     }
 
     private func drain() async {
