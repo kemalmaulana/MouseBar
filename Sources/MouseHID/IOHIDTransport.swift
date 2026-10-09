@@ -37,7 +37,14 @@ public final class IOHIDTransport: HIDTransport, @unchecked Sendable {
     }
 
     public func open(_ info: HIDDeviceInfo) async throws -> any HIDConnection {
-        guard let device = devices.withLock({ $0[info.id] }) else { throw HIDError.notOpen }
+        guard let managerDevice = devices.withLock({ $0[info.id] }) else { throw HIDError.notOpen }
+        // The manager's device object is for enumeration only. Each connection gets a private
+        // IOHIDDevice for the same service (as hidapi's hid_open_path does), so its queue,
+        // activation and cancellation never touch the shared object, and a later open starts fresh.
+        let service = IOHIDDeviceGetService(managerDevice)
+        guard service != MACH_PORT_NULL,
+              let device = IOHIDDeviceCreate(kCFAllocatorDefault, service)
+        else { throw HIDError.openFailed(code: kIOReturnNotFound) }
         let result = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         guard result == kIOReturnSuccess else { throw HIDError.openFailed(code: result) }
         let connection = IOHIDConnection(device: device)
