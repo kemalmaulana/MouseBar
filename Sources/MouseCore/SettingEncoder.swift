@@ -1,7 +1,81 @@
+import Foundation
+
+/// Port of rivalcfg's value-type handlers. Pure functions: no I/O, no state.
 public struct SettingEncoder: Sendable {
     public let layouts: ButtonLayouts
-    public init(layouts: ButtonLayouts) { self.layouts = layouts }
+
+    public init(layouts: ButtonLayouts) {
+        self.layouts = layouts
+    }
+
+    /// The HID payload for one setting, without the report id (rivalcfg writes `[0x00] + payload`).
     public func encode(_ spec: SettingSpec, value: SettingValue) throws -> [UInt8] {
+        let data: [UInt8]
+        switch (spec.valueType, value) {
+        case ("choice", .choice(let key)):
+            data = [try choiceByte(spec, key)]
+        case ("range", .int(let v)):
+            data = try rangeBytes(spec, v)
+        case ("rgbcolor", .color(let c)):
+            data = [c.r, c.g, c.b]
+        case ("multidpi_range_choice", .dpiPresets(let presets, let selected)):
+            data = try dpiBytes(spec, presets: presets, selected: selected)
+        case ("buttons", .buttons(let mapping)):
+            data = try buttonBytes(spec, mapping)
+        case ("choice", _), ("range", _), ("rgbcolor", _), ("multidpi_range_choice", _), ("buttons", _):
+            throw MouseCoreError.valueMismatch(setting: spec.key, expected: spec.valueType)
+        default:
+            throw MouseCoreError.unsupportedValueType(spec.valueType)
+        }
+        var packet = Bytes.u8(spec.command) + data + Bytes.u8(spec.commandSuffix)
+        if spec.packetLength > packet.count {
+            packet += [UInt8](repeating: 0, count: spec.packetLength - packet.count)
+        }
+        return packet
+    }
+
+    // MARK: choice
+
+    private func choiceByte(_ spec: SettingSpec, _ key: String) throws -> UInt8 {
+        guard let entry = spec.choices?.first(where: { $0.key == key }) else {
+            let valid = (spec.choices ?? []).map(\.key).joined(separator: ", ")
+            throw MouseCoreError.invalidValue("\(spec.key): '\(key)' must be one of [\(valid)]")
+        }
+        return UInt8(truncatingIfNeeded: entry.value)
+    }
+
+    // MARK: range
+
+    /// rivalcfg `matches_value_in_range`: clamp, then round to the nearest step.
+    static func nearestInRange(start: Int, stop: Int, step: Int, value: Int) -> Int {
+        if value <= start { return start }
+        if value >= stop { return stop }
+        let delta = (value - start) % step
+        if delta == 0 { return value }
+        return Double(delta) < Double(step) / 2 ? value - delta : value - delta + step
+    }
+
+    private func rangeBytes(_ spec: SettingSpec, _ value: Int) throws -> [UInt8] {
+        guard let input = spec.inputRange, input.count == 3, input[2] > 0,
+              let output = spec.outputRange, output.count == 3, output[2] > 0
+        else { throw MouseCoreError.invalidValue("\(spec.key): profile has no valid range") }
+        let inputCount = (input[1] - input[0]) / input[2] + 1
+        let outputCount = (output[1] - output[0]) / output[2] + 1
+        guard inputCount == outputCount else {
+            throw MouseCoreError.invalidValue("\(spec.key): input and output ranges differ in length")
+        }
+        let matched = Self.nearestInRange(start: input[0], stop: input[1], step: input[2], value: value)
+        let index = (matched - input[0]) / input[2]
+        return try Bytes.littleEndian(output[0] + index * output[2], length: spec.rangeLengthByte ?? 1)
+    }
+
+    // MARK: Added by Tasks 4 and 5
+
+    private func dpiBytes(_ spec: SettingSpec, presets: [Int], selected: Int?) throws -> [UInt8] {
+        throw MouseCoreError.unsupportedValueType(spec.valueType)
+    }
+
+    private func buttonBytes(_ spec: SettingSpec, _ mapping: ButtonMapping) throws -> [UInt8] {
         throw MouseCoreError.unsupportedValueType(spec.valueType)
     }
 }
