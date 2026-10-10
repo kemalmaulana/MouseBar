@@ -17,10 +17,9 @@ struct MouseBarApp: App {
             BatteryLabel(state: model.battery)
         }
         .menuBarExtraStyle(.window)
-        Window("Mouse Settings", id: "settings") {
+        Settings {
             SettingsView(model: model)
         }
-        .windowResizability(.contentSize)
         Window("Hardware Check", id: "hardware-check") {
             CheckWindow(runner: CheckRunner.shared, model: model)
         }

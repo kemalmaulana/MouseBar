@@ -5,6 +5,7 @@ import MouseCore
 struct MenuPanel: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showColors = false
 
@@ -188,8 +189,9 @@ struct MenuPanel: View {
                 }
                 Spacer()
                 Button {
-                    openWindow(id: "settings")
+                    // A menu bar app must activate first, or the Settings window opens behind other apps.
                     NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
                 } label: {
                     Text("Settings…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
                 }
