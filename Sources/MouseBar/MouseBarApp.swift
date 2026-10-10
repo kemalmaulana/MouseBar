@@ -12,10 +12,11 @@ struct MouseBarApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(model: model)
+            MenuPanel(model: model)
         } label: {
             BatteryLabel(state: model.battery)
         }
+        .menuBarExtraStyle(.window)
         Window("Mouse Settings", id: "settings") {
             SettingsView(model: model)
         }
