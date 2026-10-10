@@ -39,6 +39,7 @@ public struct RestoreSnapshot: Codable, Sendable, Equatable {
 
     /// The writes that put the mouse back, in this order: the owner's buttons, the owner's DPI presets, then every
     /// other setting the check touches (the stored value, or the factory default when MouseBar never stored one).
+    /// Use `storesValue(for:family:)` to tell which of them MouseBar should remember.
     public func restoreWrites(family: DeviceFamily) -> [(key: String, value: SettingValue)] {
         var writes: [(key: String, value: SettingValue)] = []
         if family.setting("buttons_mapping") != nil {
@@ -54,5 +55,23 @@ public struct RestoreSnapshot: Codable, Sendable, Equatable {
             }
         }
         return writes
+    }
+
+    /// True when restoring `key` should also remember the value: MouseBar stored it before the check, or the owner
+    /// entered a button remap or DPI presets here. A key MouseBar never stored (and the owner did not enter) is written
+    /// to the mouse only, so it keeps showing as "Default".
+    public func storesValue(for key: String, family: DeviceFamily) -> Bool {
+        if stored[key] != nil { return true }
+        switch key {
+        case "buttons_mapping":
+            return !buttons.assignments.isEmpty
+        case "sensitivity":
+            guard let spec = family.setting(key), case .dpiPresets(let factory, _)? = DefaultSettings.value(for: spec) else {
+                return !dpiPresets.isEmpty
+            }
+            return factory != dpiPresets
+        default:
+            return false
+        }
     }
 }

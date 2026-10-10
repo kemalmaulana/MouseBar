@@ -50,6 +50,9 @@ final class CheckRunner {
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var snapshot: RestoreSnapshot?
     @ObservationIgnored private var lastSnapshot: RestoreSnapshot?
+    /// True once a test write reached (or may have reached) the mouse since the snapshot was taken. A snapshot read from
+    /// disk after a crash counts as written. With no test write the restore only deletes the snapshot.
+    @ObservationIgnored private var testWriteMade = true
     /// Number of `restoreAll()` calls in flight; `restoreIfInterrupted()` does not start another while one runs.
     @ObservationIgnored private var restoreDepth = 0
     /// A restore was asked for while another was in flight; retried when that one ends without finishing.
@@ -123,6 +126,7 @@ final class CheckRunner {
             }
             snapshot = snap
             lastSnapshot = snap
+            testWriteMade = false
             outcomes = [.preflight: StepOutcome(step: .preflight, result: .pass, detail: "Settings snapshot saved")]
             model.isCheckRunning = true
             await session.setPollInterval(.seconds(5))
@@ -132,8 +136,14 @@ final class CheckRunner {
 
     /// Runs one step again (from the results screen), with the same snapshot and a full restore afterwards.
     func rerun(_ step: CheckStepID) {
-        guard runTask == nil, !isRestoring, step != .preflight, let snap = lastSnapshot, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, step != .preflight, let last = lastSnapshot, let session = model.activeSession else { return }
         runTask = Task {
+            // Settings changed since the first run (DPI presets, button remaps, stored values) are what gets restored.
+            var snap = last
+            snap.stored = await session.currentValues
+            if case .dpiPresets(let presets, _)? = snap.stored["sensitivity"] { snap.dpiPresets = presets }
+            if case .buttons(let mapping)? = snap.stored["buttons_mapping"] { snap.buttons = mapping }
+            lastSnapshot = snap
             do {
                 try snap.write(to: snapshotURL)
             } catch {
@@ -142,6 +152,7 @@ final class CheckRunner {
                 return
             }
             snapshot = snap
+            testWriteMade = false
             model.isCheckRunning = true
             await session.setPollInterval(.seconds(5))
             await runSteps([step])
@@ -182,8 +193,11 @@ final class CheckRunner {
             retryRestorePending = true
             return
         }
-        guard let snap = snapshot ?? RestoreSnapshot.read(from: snapshotURL) else { return }
-        snapshot = snap
+        if snapshot == nil {
+            guard let fromDisk = RestoreSnapshot.read(from: snapshotURL) else { return }
+            snapshot = fromDisk
+            testWriteMade = true   // left by an earlier process: assume the mouse was written
+        }
         await restoreAll()
         if snapshot == nil {
             model.notice = "Restored your settings after an interrupted hardware check."
@@ -234,6 +248,8 @@ final class CheckRunner {
         interrupt = nil   // a Cancel that arrived during the restore must not reach the next run
         runTask = nil
         setPhase(.results)
+        // A restore kept because the mouse slept is retried now; a wake during the run could not trigger it.
+        if snapshot != nil { Task { await restoreIfInterrupted() } }
     }
 
     private func run(_ step: CheckStepID) async throws -> StepOutcome {
@@ -287,9 +303,9 @@ final class CheckRunner {
     private func ledStep() async throws -> StepOutcome {
         try await waitForProceed("The check turns the LED blue, then green.", actionTitle: "Turn LED blue")
         let session = try activeSession()
-        try await session.applyTransient("color", .color(MouseCore.RGBColor(r: 0, g: 0, b: 255)))
+        try await testWrite(session, "color", .color(MouseCore.RGBColor(r: 0, g: 0, b: 255)))
         let blue = try await ask("Is the mouse LED blue?")
-        try await session.applyTransient("color", .color(MouseCore.RGBColor(r: 0, g: 255, b: 0)))
+        try await testWrite(session, "color", .color(MouseCore.RGBColor(r: 0, g: 255, b: 0)))
         let green = try await ask("Is the mouse LED green now?")
         return StepOutcome(
             step: .ledColor, result: blue && green ? .pass : .fail,
@@ -300,9 +316,9 @@ final class CheckRunner {
     private func pollingStep() async throws -> StepOutcome {
         try await waitForProceed("The check sets the polling rate to 125 Hz, then 1000 Hz.", actionTitle: "Start")
         let session = try activeSession()
-        try await session.applyTransient("polling_rate", .choice("125"))
+        try await testWrite(session, "polling_rate", .choice("125"))
         let slow = try await measure("Polling rate is 125 Hz. Move the mouse in circles inside the box for 3 seconds.")
-        try await session.applyTransient("polling_rate", .choice("1000"))
+        try await testWrite(session, "polling_rate", .choice("1000"))
         let fast = try await measure("Polling rate is 1000 Hz. Move the mouse in circles inside the box again.")
         guard let slow, let fast else {
             throw StepFailure(message: "Not enough mouse movement was captured. Run this step again and keep moving the mouse.")
@@ -320,24 +336,24 @@ final class CheckRunner {
         guard let snap = snapshot else { throw StepFailure(message: "No restore snapshot.") }
         var assignments = snap.buttons.assignments
         assignments["button4"] = "f18"
-        try await session.applyTransient("buttons_mapping", .buttons(ButtonMapping(assignments: assignments)))
+        try await testWrite(session, "buttons_mapping", .buttons(ButtonMapping(assignments: assignments)))
         let pressed = try await waitKey(
             "Side button 4 now types F18. Keep the pointer inside the box and press side button 4.", timeout: 15
         )
         // Back to the owner's map before the rejection test.
-        try await session.applyTransient("buttons_mapping", .buttons(snap.buttons))
+        try await testWrite(session, "buttons_mapping", .buttons(snap.buttons))
         // Validation must refuse a map without a left click before anything is written.
         var rejected = false
         do {
-            try await session.applyTransient(
-                "buttons_mapping", .buttons(ButtonMapping(assignments: ["button1": "disabled"]))
+            try await testWrite(
+                session, "buttons_mapping", .buttons(ButtonMapping(assignments: ["button1": "disabled"]))
             )
         } catch MouseCoreError.noPrimaryClick {
             rejected = true
         }
         if !rejected {
             // The write went through: undo it at once.
-            try await session.applyTransient("buttons_mapping", .buttons(snap.buttons))
+            try await testWrite(session, "buttons_mapping", .buttons(snap.buttons))
         }
         try await waitForProceed(
             "Click Continue with the left mouse button to confirm left click still works.", actionTitle: "Continue"
@@ -353,9 +369,9 @@ final class CheckRunner {
             "The check writes two DPI presets, 400 and 3200, and switches between them.", actionTitle: "Write presets"
         )
         let session = try activeSession()
-        try await session.applyTransient("sensitivity", .dpiPresets(presets: [400, 3200], selected: 0))
+        try await testWrite(session, "sensitivity", .dpiPresets(presets: [400, 3200], selected: 0))
         let slow = try await ask("Preset 1 (400 DPI) is active. Move the mouse: is the pointer slow?")
-        try await session.applyTransient("sensitivity", .dpiPresets(presets: [400, 3200], selected: 1))
+        try await testWrite(session, "sensitivity", .dpiPresets(presets: [400, 3200], selected: 1))
         let fast = try await ask("Preset 2 (3200 DPI) is active. Is the pointer much faster now?")
         let pass = slow && fast
         model.setActivePresetConfirmed(pass)
@@ -370,7 +386,7 @@ final class CheckRunner {
             "The check turns the startup lighting off and saves it to the mouse.", actionTitle: "Save to mouse"
         )
         let session = try activeSession()
-        try await session.applyTransient("default_lighting", .choice("off"))
+        try await testWrite(session, "default_lighting", .choice("off"))
         try await session.saveNow()
         let stayedOff = try await ask(
             "Unplug the USB cable if it is connected, switch the mouse off and on, and watch the LED as it starts. "
@@ -421,9 +437,15 @@ final class CheckRunner {
         .savePersistence: ["default_lighting"],
     ]
 
+    /// A transient test write. The flag is set before the write: a throw may still have reached the mouse.
+    private func testWrite(_ session: MouseSession, _ key: String, _ value: SettingValue) async throws {
+        testWriteMade = true
+        try await session.applyTransient(key, value)
+    }
+
     /// Best effort: re-sends the owner's value for every key the step tested (not stored; saved to the mouse only for the save step).
     private func undoTestWrites(of step: CheckStepID) async {
-        guard let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession else { return }
+        guard testWriteMade, let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession else { return }
         let family = await session.mouse.family
         let writes = snap.restoreWrites(family: family).filter { keys.contains($0.key) }
         for write in writes {
@@ -447,17 +469,35 @@ final class CheckRunner {
         }
     }
 
-    /// True when the mouse answers a battery query. A sleeping dongle mouse does not, and drops writes and saves.
+    /// True when the mouse answers a battery query with a reply that decodes. A sleeping dongle mouse does not, and
+    /// drops writes and saves; a stray report from another program does not decode either.
     private func mouseAnswers(_ session: MouseSession) async -> Bool {
+        guard let battery = await session.mouse.family.battery else { return true }   // nothing to probe with
         for attempt in 0..<2 {
             if attempt > 0 { try? await Task.sleep(for: .milliseconds(500)) }
-            if (try? await session.rawBatteryQuery()) != nil { return true }
+            if let reply = try? await session.rawBatteryQuery(),
+               BatteryDecoder.decode(decoder: battery.decoder, reply: reply) != nil {
+                return true
+            }
         }
         return false
     }
 
     private func restoreOnce() async {
         guard let snap = snapshot else { return }
+        if !testWriteMade {
+            // Nothing was written to the mouse: there is nothing to put back. Only the poll interval needs resetting.
+            do {
+                if FileManager.default.fileExists(atPath: snapshotURL.path) {
+                    try FileManager.default.removeItem(at: snapshotURL)
+                }
+                snapshot = nil
+            } catch {
+                model.problem = "Some settings could not be restored: snapshot: \(error)"
+            }
+            await model.activeSession?.setPollInterval(.seconds(60))
+            return
+        }
         if runTask != nil { setPhase(.restoring) }   // only a running check shows the restoring card
         guard let session = model.activeSession, await session.mouse.model.mouse == snap.mouse else {
             model.notice = "Your settings will be restored when the mouse reconnects."
@@ -473,7 +513,13 @@ final class CheckRunner {
         let family = await session.mouse.family
         for write in snap.restoreWrites(family: family) {
             do {
-                try await session.set(write.key, write.value)
+                // Only values MouseBar stored before (or the owner entered here) are remembered again; the rest
+                // go to the mouse alone, so a setting never stored does not turn into a stored factory default.
+                if snap.storesValue(for: write.key, family: family) {
+                    try await session.set(write.key, write.value)
+                } else {
+                    try await session.applyTransient(write.key, write.value)
+                }
             } catch {
                 failures.append("\(write.key): \(error)")
             }
@@ -563,19 +609,27 @@ final class CheckRunner {
     }
 
     private func measure(_ text: String) async throws -> Double? {
+        let timer = timeout(after: 30, resuming: .timestamps([]))   // no box capture at all: counts as no data
+        defer { timer.cancel() }
         guard case .timestamps(let timestamps) = try await waitForInput(.measure(text, seconds: 3)) else { return nil }
         return PollingRateEstimator.rate(timestamps: timestamps)
     }
 
-    private func waitKey(_ text: String, timeout: Double) async throws -> Bool {
-        let token = phaseToken + 1   // the token setPhase assigns for this wait
-        let timer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(timeout))
-            guard let self, !Task.isCancelled, self.phaseToken == token else { return }
-            self.resume(.success(.timeout))
-        }
+    private func waitKey(_ text: String, timeout seconds: Double) async throws -> Bool {
+        let timer = timeout(after: seconds, resuming: .timeout)
         defer { timer.cancel() }
         return try await waitForInput(.keyPress(text)) == .key
+    }
+
+    /// Resumes the next wait with `input` after `seconds`, unless that wait already ended (the phase token moved on).
+    /// Call it right before `waitForInput`, and cancel the returned task when the wait ends.
+    private func timeout(after seconds: Double, resuming input: Input) -> Task<Void, Never> {
+        let token = phaseToken + 1   // the token setPhase assigns for the wait
+        return Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled, self.phaseToken == token else { return }
+            self.resume(.success(input))
+        }
     }
 
     /// Polls `condition` every 0.5 s until it holds (true) or the timeout passes (false). Skip/Cancel interrupt it.
