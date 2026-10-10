@@ -62,8 +62,14 @@ struct KeyPickerPopover: View {
             TextField("Search keys", text: $query)
                 .textFieldStyle(.roundedBorder)
             List(filtered, id: \.self) { key in
-                Button(key) { onPick(key) }
-                    .buttonStyle(.plain)
+                Button {
+                    onPick(key)
+                } label: {
+                    Text(key)
+                        .frame(maxWidth: .infinity, minHeight: Theme.minHitTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             .frame(height: 220)
         }

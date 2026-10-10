@@ -50,10 +50,10 @@ struct StatusBanner: View {
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
+                        .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
-                .contentShape(Rectangle())
                 .accessibilityLabel("Dismiss")
             }
         }
