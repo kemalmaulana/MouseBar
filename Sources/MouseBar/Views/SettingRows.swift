@@ -16,8 +16,22 @@ struct SettingRow: View {
             default: EmptyView()
             }
             Text(spec.description).font(.caption).foregroundStyle(.secondary)
+            if model.values[spec.key] == nil {
+                Text(unsetCaption).font(.caption).foregroundStyle(.secondary)
+            }
         } header: {
             Text(spec.label)
+        }
+    }
+
+    /// The mouse cannot report its settings, so a row MouseBar never set shows the factory default.
+    private var unsetCaption: String {
+        switch spec.valueType {
+        case "multidpi_range_choice", "buttons":
+            "Not set by MouseBar yet. The mouse can't report its settings, so this shows factory defaults. "
+                + "Changing one entry rewrites all of them."
+        default:
+            "Not set by MouseBar yet; showing the factory default."
         }
     }
 }

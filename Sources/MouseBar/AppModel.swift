@@ -22,6 +22,8 @@ final class AppModel {
     private var activeID: UInt64?
     private var available: [ConnectedMouse] = []
     private var started = false
+    /// The latest resync per setting key; a newer edit of the same key cancels the older waiter.
+    private var resyncTasks: [String: Task<Void, Never>] = [:]
 
     private init() {
         // Generated and unit-tested data; failing to decode it is a programming error.
@@ -72,6 +74,8 @@ final class AppModel {
     private func selectActive() async {
         let chosen = ActiveMousePolicy.choose(from: available)
         guard chosen?.hidID != activeID else { return }
+        for task in resyncTasks.values { task.cancel() }
+        resyncTasks = [:]
         await session?.stop()
         session = nil
         activeID = chosen?.hidID
@@ -111,16 +115,20 @@ final class AppModel {
     }
 
     func submit(_ key: String, _ value: SettingValue) {
+        // Clicking the selected segment or a slider without moving it must not write to the mouse or schedule a save.
+        if values[key] != nil && values[key] == value { return }
         problem = nil
         // Optimistic, so controls respond at once; resynced below if the session rejects the edit.
         values[key] = value
         guard let session, let id = activeID else { return }
-        Task {
+        resyncTasks[key]?.cancel()
+        resyncTasks[key] = Task {
             await session.submit(key, value)
             await session.waitUntilIdle()
+            guard !Task.isCancelled else { return }       // a newer edit of this key owns the resync now
             let accepted = await session.currentValues[key]
-            // Only this key, so in-flight edits to other keys are not reverted.
-            guard id == activeID else { return }
+            // Only this key, only if the mouse is still the active one and no newer optimistic edit landed.
+            guard id == activeID && values[key] == value else { return }
             values[key] = accepted
         }
     }
