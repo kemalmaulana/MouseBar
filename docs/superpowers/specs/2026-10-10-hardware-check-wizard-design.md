@@ -1,7 +1,7 @@
 # Hardware Check wizard and active DPI preset
 
 Date: 2026-10-10
-Status: draft, awaiting owner review
+Status: approved by the owner (2026-10-10)
 Branch: `feat/hardware-check-wizard` (from `feat/mousebar-phase0-2` at `ccd9fe3`)
 
 ## 1. Purpose and success criteria
@@ -70,6 +70,18 @@ After the last step: restore (section 5), then show the report with "Copy report
 - `HardwareCheck/EventCaptureBox.swift` (`NSViewRepresentable`): counts `mouseMoved` events (sets `NSEvent.isMouseCoalescingEnabled = false` while measuring, restores the previous value after) and reports key-down events (F18).
 - `AppModel` additions: `isCheckRunning` (Settings window controls are disabled while true), access to the active session for the runner, and a published connection description (model, wired or wireless).
 - Entry points: "Hardware Check…" item in the menu bar menu and a button at the bottom of the Settings window. Window scene id `hardware-check`.
+
+### Wizard look (approved 2026-10-10, see `2026-10-10-ui-refinement-design.md`)
+
+An assistant card, like macOS Setup Assistant, in a 560 × 520 window using the native theme:
+
+- Top: progress dots and "Step N of 9".
+- Card: the step's SF Symbol (large, accent tinted), title (`.title3`), one or two lines of instructions.
+- Interaction area per step: the capture box with a live counter ("998 events/s"), large Yes/No buttons (`.controlSize(.large)`), or a spinner with "Waiting for the dongle…" and the remaining time.
+- Footer: Skip, Cancel, and **Continue** as the default button (Return).
+- While restoring: an overlay "Restoring your settings…" with a spinner.
+- Results screen: one row per step with ✓ / ✗ / – plus the word Passed / Failed / Skipped and an expandable detail (measurements, raw hex); "Run again" per step; "Copy report" and "Reveal in Finder".
+- Reduce Motion: step transitions are instant.
 
 ## 5. Safety and restore
 
