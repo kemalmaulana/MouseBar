@@ -1,0 +1,78 @@
+name: macOS
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build, test and bundle (arm64)
+    # Package.swift requires swift-tools-version 6.2, so use an image with Xcode 26 (Swift 6.2+).
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          uname -m
+
+      - name: Build (zero warnings required)
+        run: |
+          set -o pipefail
+          swift build --arch arm64 2>&1 | tee build.log
+          if grep -E "warning:|error:" build.log; then
+            echo "::error::build produced warnings or errors"
+            exit 1
+          fi
+
+      - name: Test
+        run: swift test --arch arm64 2>&1 | tee test.log
+
+      - name: Test output must be pristine
+        run: |
+          if grep -iE "leaked|warning:" test.log; then
+            echo "::error::test output contains leaked continuations or warnings"
+            exit 1
+          fi
+
+      - name: Bundle (release, ad-hoc signed)
+        run: Scripts/bundle.sh release
+
+      - name: Bundle is arm64 only and valid
+        run: |
+          lipo -archs build/MouseBar.app/Contents/MacOS/MouseBar | grep -qx arm64
+          codesign --verify --verbose build/MouseBar.app
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: MouseBar-arm64
+          path: build/MouseBar.app
+          if-no-files-found: error
+
+  generated-data:
+    name: Generated profiles are up to date
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate from pinned rivalcfg
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q -r Tools/requirements.txt
+          .venv/bin/python -I Tools/gen_profiles.py
+
+      - name: Generated files must match the committed ones
+        run: git diff --exit-code -- Sources/MouseCore/Generated Tests/MouseCoreTests/Fixtures
