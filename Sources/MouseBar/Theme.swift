@@ -1,5 +1,4 @@
 import SwiftUI
-import MouseCore
 
 /// Design tokens (docs/superpowers/specs/2026-10-10-ui-refinement-design.md, section 2).
 enum Theme {

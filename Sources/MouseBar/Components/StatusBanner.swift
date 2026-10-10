@@ -52,6 +52,8 @@ struct StatusBanner: View {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(.borderless)
+                .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                .contentShape(Rectangle())
                 .accessibilityLabel("Dismiss")
             }
         }
