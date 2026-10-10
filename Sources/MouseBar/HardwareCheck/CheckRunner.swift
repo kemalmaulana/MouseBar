@@ -52,6 +52,8 @@ final class CheckRunner {
     @ObservationIgnored private var lastSnapshot: RestoreSnapshot?
     /// Number of `restoreAll()` calls in flight; `restoreIfInterrupted()` does not start another while one runs.
     @ObservationIgnored private var restoreDepth = 0
+    /// A restore was asked for while another was in flight; retried when that one ends without finishing.
+    @ObservationIgnored private var retryRestorePending = false
 
     init(model: AppModel) {
         self.model = model
@@ -66,7 +68,7 @@ final class CheckRunner {
 
     /// Welcome -> preflight. Prefills the owner's DPI presets and button remaps when MouseBar already stores them.
     func start() {
-        guard runTask == nil else { return }
+        guard runTask == nil, !isRestoring else { return }
         outcomes = [:]
         reportURL = nil
         reportMarkdown = nil
@@ -82,7 +84,7 @@ final class CheckRunner {
 
     /// Preflight -> writes the restore snapshot, then runs every step.
     func beginTests() {
-        guard runTask == nil, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, let session = model.activeSession else { return }
         let useFactory = useFactoryDefaults
         var presets = enteredPresets
         var buttons = enteredButtons
@@ -118,7 +120,7 @@ final class CheckRunner {
 
     /// Runs one step again (from the results screen), with the same snapshot and a full restore afterwards.
     func rerun(_ step: CheckStepID) {
-        guard runTask == nil, step != .preflight, let snap = lastSnapshot, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, step != .preflight, let snap = lastSnapshot, let session = model.activeSession else { return }
         runTask = Task {
             do {
                 try snap.write(to: snapshotURL)
@@ -163,12 +165,18 @@ final class CheckRunner {
     /// At launch / connect / wake: a snapshot left by an interrupted check (crash, force quit) or kept by a restore that
     /// could not finish (mouse gone or asleep, a failed write) is restored. A snapshot already in memory is retried.
     func restoreIfInterrupted() async {
-        guard runTask == nil, !isRestoring, let snap = snapshot ?? RestoreSnapshot.read(from: snapshotURL) else { return }
+        guard runTask == nil else { return }
+        guard !isRestoring else {
+            retryRestorePending = true
+            return
+        }
+        guard let snap = snapshot ?? RestoreSnapshot.read(from: snapshotURL) else { return }
         snapshot = snap
         await restoreAll()
         if snapshot == nil {
             model.notice = "Restored your settings after an interrupted hardware check."
         }
+        // A background restore never changes the card the owner is on (welcome, preflight, results).
         if phase == .restoring { setPhase(.idle) }
     }
 
@@ -208,10 +216,10 @@ final class CheckRunner {
             await undoTestWrites(of: step)
             if stop { break }
         }
-        interrupt = nil
         await restoreAll()
         writeReport()
         model.isCheckRunning = false
+        interrupt = nil   // a Cancel that arrived during the restore must not reach the next run
         runTask = nil
         setPhase(.results)
     }
@@ -416,16 +424,36 @@ final class CheckRunner {
     /// Writes (and stores) every restore value, saves to the mouse, resets the poll interval, then deletes the
     /// snapshot. Keeps the snapshot when anything failed or the mouse is gone, so a later connect retries.
     private func restoreAll() async {
-        guard let snap = snapshot else { return }
+        guard snapshot != nil else { return }
         restoreDepth += 1
-        defer { restoreDepth -= 1 }
-        setPhase(.restoring)
+        await restoreOnce()
+        restoreDepth -= 1
+        // Another restore was asked for meanwhile (for example a new connection) and this one did not finish.
+        if retryRestorePending {
+            retryRestorePending = false
+            if snapshot != nil { await restoreIfInterrupted() }
+        }
+    }
+
+    /// True when the mouse answers a battery query. A sleeping dongle mouse does not, and drops writes and saves.
+    private func mouseAnswers(_ session: MouseSession) async -> Bool {
+        for attempt in 0..<2 {
+            if attempt > 0 { try? await Task.sleep(for: .milliseconds(500)) }
+            if (try? await session.rawBatteryQuery()) != nil { return true }
+        }
+        return false
+    }
+
+    private func restoreOnce() async {
+        guard let snap = snapshot else { return }
+        if runTask != nil { setPhase(.restoring) }   // only a running check shows the restoring card
         guard let session = model.activeSession, await session.mouse.model.mouse == snap.mouse else {
             model.notice = "Your settings will be restored when the mouse reconnects."
             return
         }
-        // A sleeping dongle mouse drops writes and a save: keep the snapshot until it answers again.
-        guard model.battery.freshness != .asleep else {
+        // A sleeping dongle mouse drops writes and a save: keep the snapshot until it answers again. At launch the
+        // battery state is still "connecting", so the state alone is not enough: probe the mouse before any write.
+        guard model.battery.freshness != .asleep, await mouseAnswers(session) else {
             model.notice = "Your settings will be restored when the mouse wakes."
             return
         }
