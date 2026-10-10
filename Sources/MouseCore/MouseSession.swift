@@ -51,9 +51,10 @@ public actor MouseSession {
         var errors: [String] = []
         for spec in mouse.family.settings {
             guard let value = values[spec.key] else { continue }
-            // DPI presets live in the mouse's own memory (saved by the debounced save) and the UI has no
-            // active-preset picker, so re-sending them would snap the active preset back to the first one
-            // on every connect, replug, or cable/dongle switch. The stored value stays untouched.
+            // DPI presets live in the mouse's own memory (saved by the debounced save). Re-sending them would
+            // snap the active preset back to the first one on every connect, replug, or cable/dongle switch.
+            // (The active-preset picker exists, but only once the hardware check confirmed it works:
+            // `activePresetConfirmed`.) The stored value stays untouched.
             if spec.valueType == "multidpi_range_choice" { continue }
             do {
                 try validate(spec, value)

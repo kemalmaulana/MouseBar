@@ -100,7 +100,7 @@ struct CheckWindow: View {
             Text("Hardware Check")
                 .font(.title3.weight(.semibold))
             CheckBanners(model: model)
-            Text("Checks that MouseBar's changes really reach your mouse: battery over the cable and the dongle, LED color, polling rate, buttons, DPI, saving, and wake. Takes about 5 minutes. Your settings are put back at the end.")
+            Text("Checks that MouseBar's changes really reach your mouse: battery over the cable and the dongle, LED color, polling rate, buttons, DPI, saving, and wake. Takes about 5 minutes. MouseBar puts back the settings it has stored and the DPI presets and button remaps you enter here. Everything else goes back to factory defaults, and the active DPI preset becomes preset 1.")
                 .font(.callout)
                 .multilineTextAlignment(.center)
             if model.ggWarning {

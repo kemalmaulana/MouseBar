@@ -28,10 +28,10 @@ DPI presets (up to 5), polling rate, LED color, button remapping, sleep and dim 
 
 ## Interface
 
-- **Menu bar:** battery symbol and percentage (hide the percentage in Settings → Device). It turns red when low and shows a moon while the mouse sleeps.
+- **Menu bar:** battery symbol and percentage (hide the percentage in Settings → Device). It may turn red when low (tint not yet verified in the menu bar) and shows a moon while the mouse sleeps.
 - **Panel:** click the menu bar item for the mouse, its connection (Cable or 2.4 GHz), a battery gauge, quick polling-rate and LED controls, warnings, and "Saving to mouse… / Saved to mouse" feedback. A DPI switch appears once the hardware check has confirmed that the mouse accepts an active-preset change.
 - **Settings (⌘,):** tabs for Performance (DPI presets, polling rate), Buttons (diagram plus per-button actions, including media and keyboard keys), Lighting, Power, and Device (info, Hardware Check, reset). A "Default" tag marks values MouseBar has never set.
-- **Hardware Check:** from the panel or Settings → Device. It walks you through 9 short steps on your real mouse (battery over cable and dongle, LED, polling rate, buttons, DPI, saving, wake) and writes a Markdown report to `~/Library/Application Support/MouseBar/reports/`. Your settings are restored when it finishes, when you cancel or quit, or at the next launch after a crash.
+- **Hardware Check:** from the panel or Settings → Device. It walks you through 9 short steps on your real mouse (battery over cable and dongle, LED, polling rate, buttons, DPI, saving, wake) and writes a Markdown report to `~/Library/Application Support/MouseBar/reports/`. MouseBar puts back the settings it has stored and the DPI presets and button remaps you enter here. Everything else goes back to factory defaults, and the active DPI preset becomes preset 1. This happens when it finishes, when you cancel or quit, or at the next launch after a crash (not yet verified on hardware).
 
 ## Tools
 

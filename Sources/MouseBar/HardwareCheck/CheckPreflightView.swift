@@ -25,7 +25,7 @@ struct CheckPreflightView: View {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
                 Text("Before you start")
                     .font(.title3.weight(.semibold))
-                Text("The mouse can't report its DPI presets or button remaps. Enter them so the check can put them back afterwards. Start with the USB cable connected and keep the dongle nearby.")
+                Text("MouseBar puts back the settings it has stored and the DPI presets and button remaps you enter here. Everything else goes back to factory defaults, and the active DPI preset becomes preset 1. Start with the USB cable connected and keep the dongle nearby.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Toggle("I don't know them — restore factory defaults", isOn: $runner.useFactoryDefaults)

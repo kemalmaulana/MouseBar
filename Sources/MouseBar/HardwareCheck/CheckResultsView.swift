@@ -64,6 +64,7 @@ struct CheckResultsView: View {
                     }
                     .controlSize(.small)
                     .disabled(runner.isRunning)
+                    .accessibilityLabel("Run \(step.title) again")
                 }
             }
         }
