@@ -12,12 +12,16 @@ struct MouseBarApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(model: model)
+            MenuPanel(model: model)
         } label: {
             BatteryLabel(state: model.battery)
         }
-        Window("Mouse Settings", id: "settings") {
+        .menuBarExtraStyle(.window)
+        Settings {
             SettingsView(model: model)
+        }
+        Window("Hardware Check", id: "hardware-check") {
+            CheckWindow(runner: CheckRunner.shared, model: model)
         }
         .windowResizability(.contentSize)
     }

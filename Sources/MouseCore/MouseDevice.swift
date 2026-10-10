@@ -1,9 +1,18 @@
+import Foundation
+import os
+
 /// One connected mouse. Actors are re-entrant, so every public command runs under a FIFO lock:
 /// commands never overlap, and each keeps the 50 ms spacing rivalcfg uses. A battery query holds
 /// the lock from flush to reply, so no other command can steal or flush its answer.
 public actor MouseDevice {
     public static let commandDelay: Duration = .milliseconds(50)
     public static let replyTimeout: Duration = .milliseconds(200)
+
+    private static let log = Logger(subsystem: "dev.mousebar.MouseBar", category: "hid")
+
+    private static func hex(_ bytes: [UInt8]) -> String {
+        bytes.map { String(format: "%02x", $0) }.joined(separator: " ")
+    }
 
     public let family: DeviceFamily
     public let model: DeviceModel
@@ -64,9 +73,22 @@ public actor MouseDevice {
                 guard let reply = try await connection.read(
                     length: max(battery.responseLength, 2), timeout: remaining
                 ) else { return nil }
+                Self.log.debug("read \(Self.hex(reply), privacy: .public)")
                 if let echo, reply.first != echo { continue }
                 return BatteryDecoder.decode(decoder: battery.decoder, reply: reply)
             }
+        }
+    }
+
+    /// The first report answering a battery query, raw: no decoding, no echo filter (hardware check diagnostics).
+    public func rawBatteryQuery() async throws -> [UInt8]? {
+        try await exclusive {
+            guard let battery = family.battery else { return nil }
+            await connection.flushInput()
+            try await send(Bytes.u8(battery.command), readback: 0)
+            let reply = try await connection.read(length: 64, timeout: Self.replyTimeout)
+            if let reply { Self.log.debug("raw battery reply \(Self.hex(reply), privacy: .public)") }
+            return reply
         }
     }
 
@@ -97,12 +119,14 @@ public actor MouseDevice {
         do {
             try await connection.write(payload)
         } catch {
+            Self.log.debug("write failed, retrying \(Self.hex(payload), privacy: .public)")
             await sleeper.sleep(for: Self.commandDelay)
             try await connection.write(payload)
         }
+        Self.log.debug("write \(Self.hex(payload), privacy: .public)")
         await sleeper.sleep(for: Self.commandDelay)
-        if readback > 0 {
-            _ = try? await connection.read(length: readback, timeout: Self.replyTimeout)
+        if readback > 0, let reply = try? await connection.read(length: readback, timeout: Self.replyTimeout) {
+            Self.log.debug("readback \(Self.hex(reply), privacy: .public)")
         }
     }
 }
