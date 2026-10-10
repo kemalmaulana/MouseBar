@@ -33,7 +33,8 @@ struct LEDSwatches: View {
                 }
                 .buttonStyle(.plain)
                 .help(preset.name)
-                .accessibilityLabel(isSelected ? "\(preset.name), selected" : preset.name)
+                .accessibilityLabel(preset.name)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }

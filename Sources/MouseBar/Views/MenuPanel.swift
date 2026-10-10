@@ -38,6 +38,7 @@ struct MenuPanel: View {
                 .accessibilityHidden(true)
             Text(model.displayName ?? "Mouse")
                 .font(.headline)
+                .lineLimit(1)
             Spacer()
             if let connection = model.connection {
                 Label(connection.title, systemImage: connection.symbol)
@@ -53,7 +54,7 @@ struct MenuPanel: View {
     private var battery: some View {
         let state = model.battery
         return VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
+            HStack(alignment: .center, spacing: Theme.Space.m) {
                 Gauge(value: Double(state.level ?? 0), in: 0...100) { EmptyView() }
                     .gaugeStyle(.accessoryLinearCapacity)
                     .tint(Theme.batteryColor(level: state.level))
@@ -106,7 +107,7 @@ struct MenuPanel: View {
                         set: { model.submit(spec.key, .choice($0)) }
                     )) {
                         ForEach(spec.choices ?? [], id: \.key) { choice in
-                            Text(choice.key).tag(choice.key)
+                            Text(ValueFormat.choice(key: spec.key, choice.key)).tag(choice.key)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -131,18 +132,14 @@ struct MenuPanel: View {
                                 .font(.callout)
                                 .monospaced()
                         }
+                        .frame(minHeight: Theme.minHitTarget)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("LED color \(current.map { "#" + $0.hexString.uppercased() } ?? "not set")")
                     .popover(isPresented: $showColors, arrowEdge: .bottom) {
-                        VStack(alignment: .leading, spacing: Theme.Space.s) {
-                            LEDSwatches(selected: current) { model.submit(spec.key, .color($0)) }
-                            ColorPicker("Custom color", selection: Binding(
-                                get: { current?.swiftUIColor ?? .red },
-                                set: { if let rgb = MouseCore.RGBColor(color: $0) { model.submit(spec.key, .color(rgb)) } }
-                            ), supportsOpacity: false)
-                        }
-                        .padding(Theme.Space.m)
+                        LEDSwatches(selected: current) { model.submit(spec.key, .color($0)) }
+                            .padding(Theme.Space.m)
                     }
                 }
             }
@@ -183,19 +180,27 @@ struct MenuPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack {
-                Button("Hardware Check…") {
+                Button {
                     openWindow(id: "hardware-check")
                     NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Text("Hardware Check…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
                 }
                 Spacer()
-                Button("Settings…") {
+                Button {
                     openWindow(id: "settings")
                     NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Text("Settings…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
                 }
                 .keyboardShortcut(",")
             }
-            Button("Quit MouseBar") { NSApplication.shared.terminate(nil) }
-                .keyboardShortcut("q")
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Text("Quit MouseBar").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
+            }
+            .keyboardShortcut("q")
         }
         .buttonStyle(.borderless)
     }
@@ -218,7 +223,7 @@ struct MenuPanel: View {
                 let minutes = Int(now.timeIntervalSince(read) / 60)
                 parts.append(minutes < 1 ? "read just now" : "read \(minutes) min ago")
             }
-            return parts.joined(separator: " · ")
+            return parts.isEmpty ? "Battery OK" : parts.joined(separator: " · ")
         }
     }
 }
