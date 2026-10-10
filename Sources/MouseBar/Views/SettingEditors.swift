@@ -35,7 +35,7 @@ struct SettingEditor: View {
         case "choice": ChoiceEditor(model: model, spec: spec)
         case "range": RangeEditor(model: model, spec: spec)
         case "rgbcolor": ColorRow(spec: spec, model: model)        // replaced by ColorEditor in Task 10
-        case "buttons": ButtonsRow(spec: spec, model: model)       // replaced by ButtonsEditor in Task 9
+        case "buttons": ButtonsEditor(model: model, spec: spec)
         default:
             Text("This setting type (\(spec.valueType)) has no editor yet.")
                 .foregroundStyle(.secondary)
