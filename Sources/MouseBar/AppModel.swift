@@ -163,7 +163,12 @@ final class AppModel {
     // A stopped session can still deliver an already-queued callback; only the active mouse may update the UI.
     private func setBattery(_ state: BatteryState, from id: UInt64) {
         guard id == activeID else { return }
+        let wasAsleep = battery.freshness == .asleep
         battery = state
+        // A restore kept because the mouse was asleep is retried as soon as it answers again.
+        if wasAsleep && state.freshness == .fresh && !isCheckRunning && CheckRunner.shared.needsRestore {
+            Task { await CheckRunner.shared.restoreIfInterrupted() }
+        }
     }
 
     private func setProblem(_ message: String, from id: UInt64) {

@@ -50,6 +50,8 @@ final class CheckRunner {
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var snapshot: RestoreSnapshot?
     @ObservationIgnored private var lastSnapshot: RestoreSnapshot?
+    /// Number of `restoreAll()` calls in flight; `restoreIfInterrupted()` does not start another while one runs.
+    @ObservationIgnored private var restoreDepth = 0
 
     init(model: AppModel) {
         self.model = model
@@ -57,6 +59,7 @@ final class CheckRunner {
 
     var isRunning: Bool { runTask != nil }
     var needsRestore: Bool { snapshot != nil }
+    private var isRestoring: Bool { restoreDepth > 0 }
     private var snapshotURL: URL { RestoreSnapshot.fileURL(in: model.settingsDirectory) }
 
     // MARK: Owner actions
@@ -157,9 +160,10 @@ final class CheckRunner {
 
     // MARK: Restore entry points
 
-    /// At launch / connect: a snapshot left by an interrupted check (crash, force quit) is restored once.
+    /// At launch / connect / wake: a snapshot left by an interrupted check (crash, force quit) or kept by a restore that
+    /// could not finish (mouse gone or asleep, a failed write) is restored. A snapshot already in memory is retried.
     func restoreIfInterrupted() async {
-        guard runTask == nil, snapshot == nil, let snap = RestoreSnapshot.read(from: snapshotURL) else { return }
+        guard runTask == nil, !isRestoring, let snap = snapshot ?? RestoreSnapshot.read(from: snapshotURL) else { return }
         snapshot = snap
         await restoreAll()
         if snapshot == nil {
@@ -168,18 +172,25 @@ final class CheckRunner {
         if phase == .restoring { setPhase(.idle) }
     }
 
-    /// From the app delegate when quitting.
+    /// From the app delegate when quitting. A running check is cancelled and awaited: it undoes the step's test
+    /// writes and restores in `runSteps`, so no later test write can land after the restore.
     func restoreForQuit() async {
-        if input != nil { resume(.failure(Cancelled())) }
-        await restoreAll()
+        if runTask != nil {
+            if input != nil { resume(.failure(Cancelled())) } else { interrupt = Cancelled() }
+            await runTask?.value
+        } else {
+            await restoreAll()
+        }
     }
 
     // MARK: Step sequencing
 
     private func runSteps(_ steps: [CheckStepID]) async {
         for step in steps {
-            stepIndex = CheckStepID.allCases.firstIndex(of: step) ?? 0
+            // A Cancel that arrived between steps stays pending until here; a late Skip belongs to no step.
+            if interrupt is Cancelled { break }
             interrupt = nil
+            stepIndex = CheckStepID.allCases.firstIndex(of: step) ?? 0
             var stop = false
             do {
                 outcomes[step] = try await run(step)
@@ -197,6 +208,7 @@ final class CheckRunner {
             await undoTestWrites(of: step)
             if stop { break }
         }
+        interrupt = nil
         await restoreAll()
         writeReport()
         model.isCheckRunning = false
@@ -266,6 +278,7 @@ final class CheckRunner {
     }
 
     private func pollingStep() async throws -> StepOutcome {
+        try await waitForProceed("The check sets the polling rate to 125 Hz, then 1000 Hz.", actionTitle: "Start")
         let session = try activeSession()
         try await session.applyTransient("polling_rate", .choice("125"))
         let slow = try await measure("Polling rate is 125 Hz. Move the mouse in circles inside the box for 3 seconds.")
@@ -282,6 +295,7 @@ final class CheckRunner {
     }
 
     private func buttonsStep() async throws -> StepOutcome {
+        try await waitForProceed("The check maps side button 4 to F18.", actionTitle: "Map button")
         let session = try activeSession()
         guard let snap = snapshot else { throw StepFailure(message: "No restore snapshot.") }
         var assignments = snap.buttons.assignments
@@ -387,7 +401,7 @@ final class CheckRunner {
         .savePersistence: ["default_lighting"],
     ]
 
-    /// Best effort: re-sends the owner's value for every key the step tested (not stored, not saved).
+    /// Best effort: re-sends the owner's value for every key the step tested (not stored; saved to the mouse only for the save step).
     private func undoTestWrites(of step: CheckStepID) async {
         guard let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession else { return }
         let family = await session.mouse.family
@@ -395,15 +409,24 @@ final class CheckRunner {
         for write in writes {
             try? await session.applyTransient(write.key, write.value)
         }
+        // The save step wrote the test value to the mouse's memory: put the owner's value there too.
+        if step == .savePersistence { try? await session.saveNow() }
     }
 
     /// Writes (and stores) every restore value, saves to the mouse, resets the poll interval, then deletes the
     /// snapshot. Keeps the snapshot when anything failed or the mouse is gone, so a later connect retries.
     private func restoreAll() async {
         guard let snap = snapshot else { return }
+        restoreDepth += 1
+        defer { restoreDepth -= 1 }
         setPhase(.restoring)
         guard let session = model.activeSession, await session.mouse.model.mouse == snap.mouse else {
             model.notice = "Your settings will be restored when the mouse reconnects."
+            return
+        }
+        // A sleeping dongle mouse drops writes and a save: keep the snapshot until it answers again.
+        guard model.battery.freshness != .asleep else {
+            model.notice = "Your settings will be restored when the mouse wakes."
             return
         }
         var failures: [String] = []
@@ -422,8 +445,14 @@ final class CheckRunner {
         }
         await session.setPollInterval(.seconds(60))
         await model.refreshValues()
+        if failures.isEmpty, FileManager.default.fileExists(atPath: snapshotURL.path) {
+            do {
+                try FileManager.default.removeItem(at: snapshotURL)
+            } catch {
+                failures.append("snapshot: \(error)")
+            }
+        }
         if failures.isEmpty {
-            try? FileManager.default.removeItem(at: snapshotURL)
             snapshot = nil
         } else {
             model.problem = "Some settings could not be restored: \(failures.joined(separator: "; "))"
@@ -459,7 +488,16 @@ final class CheckRunner {
         phaseToken += 1
     }
 
+    /// Throws a pending Skip/Cancel. A Cancel stays pending (only `runSteps` clears it) so nothing can swallow it.
+    private func checkpoint() throws {
+        guard let pending = interrupt else { return }
+        if pending is Skipped { interrupt = nil }
+        throw pending
+    }
+
+    /// The live session; a checkpoint first, so every step that writes stops on Cancel/Skip before its first write.
     private func activeSession() throws -> MouseSession {
+        try checkpoint()
         guard let session = model.activeSession else { throw StepFailure(message: "No mouse connected.") }
         return session
     }
@@ -471,10 +509,7 @@ final class CheckRunner {
     }
 
     private func waitForInput(_ phase: Phase) async throws -> Input {
-        if let pending = interrupt {
-            interrupt = nil
-            throw pending
-        }
+        try checkpoint()
         setPhase(phase)
         return try await withCheckedThrowingContinuation { input = $0 }
     }
@@ -509,10 +544,7 @@ final class CheckRunner {
         let deadline = Date().addingTimeInterval(timeout)
         setPhase(.waiting(text, until: deadline))
         while Date() < deadline {
-            if let pending = interrupt {
-                interrupt = nil
-                throw pending
-            }
+            try checkpoint()
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(500))
         }
