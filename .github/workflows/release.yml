@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, verify and publish
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Build (zero warnings required)
+        run: |
+          set -o pipefail
+          swift build --arch arm64 2>&1 | tee build.log
+          if grep -E "warning:|error:" build.log; then
+            echo "::error::build produced warnings or errors"
+            exit 1
+          fi
+
+      - name: Test
+        run: |
+          set -o pipefail
+          swift test --arch arm64 2>&1 | tee test.log
+          if grep -iE "leaked|warning:" test.log; then
+            echo "::error::test output contains leaked continuations or warnings"
+            exit 1
+          fi
+
+      - name: Package arm64 app
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          Scripts/bundle.sh release
+          lipo -archs build/MouseBar.app/Contents/MacOS/MouseBar | grep -qx arm64
+          codesign --verify --verbose build/MouseBar.app
+          ZIP="build/MouseBar-${TAG#v}-arm64.zip"
+          ditto -c -k --keepParent build/MouseBar.app "$ZIP"
+          shasum -a 256 "$ZIP" > "$ZIP.sha256"
+          cat "$ZIP.sha256"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          args=(--verify-tag --title "MouseBar ${TAG#v}")
+          if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi   # v1.2.3-rc.1 is a pre-release
+          if [[ -f "docs/release-notes/$TAG.md" ]]; then
+            args+=(--notes-file "docs/release-notes/$TAG.md")
+          else
+            args+=(--generate-notes)
+          fi
+          gh release create "$TAG" "$ZIP" "$ZIP.sha256" "${args[@]}"
