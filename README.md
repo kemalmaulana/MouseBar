@@ -26,6 +26,13 @@ DPI presets (up to 5), polling rate, LED color, button remapping, sleep and dim 
 - The other settings are sent to the mouse, and a save command follows about 2 seconds after your last change. This is the design; whether the mouse keeps them after a power cycle is not yet verified on hardware.
 - The mouse cannot report its current settings, so the window shows factory defaults for anything MouseBar has not set. The first change to a DPI preset or button rewrites the whole list or map (and saves it).
 
+## Interface
+
+- **Menu bar:** battery symbol and percentage (hide the percentage in Settings → Device). It turns red when low and shows a moon while the mouse sleeps.
+- **Panel:** click the menu bar item for the mouse, its connection (Cable or 2.4 GHz), a battery gauge, quick polling-rate and LED controls, warnings, and "Saving to mouse… / Saved to mouse" feedback. A DPI switch appears once the hardware check has confirmed that the mouse accepts an active-preset change.
+- **Settings (⌘,):** tabs for Performance (DPI presets, polling rate), Buttons (diagram plus per-button actions, including media and keyboard keys), Lighting, Power, and Device (info, Hardware Check, reset). A "Default" tag marks values MouseBar has never set.
+- **Hardware Check:** from the panel or Settings → Device. It walks you through 9 short steps on your real mouse (battery over cable and dongle, LED, polling rate, buttons, DPI, saving, wake) and writes a Markdown report to `~/Library/Application Support/MouseBar/reports/`. Your settings are restored when it finishes, when you cancel or quit, or at the next launch after a crash.
+
 ## Tools
 
 - `swift run hidprobe list | battery | dpi <index>`: diagnose what macOS shows and what the mouse answers. `list` and `battery` do not change settings (`battery` sends a query packet). `dpi <index>` WRITES the default presets 400/800/1200/2400/3200 to the mouse's working memory without saving; a later MouseBar save can store them, so power-cycle the mouse afterwards.
