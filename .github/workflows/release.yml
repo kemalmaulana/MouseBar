@@ -45,7 +45,7 @@ jobs:
           codesign --verify --verbose build/MouseBar.app
           ZIP="build/MouseBar-${TAG#v}-arm64.zip"
           ditto -c -k --keepParent build/MouseBar.app "$ZIP"
-          shasum -a 256 "$ZIP" > "$ZIP.sha256"
+          (cd build && shasum -a 256 "$(basename "$ZIP")") > "$ZIP.sha256"   # filename only, so it verifies in any folder
           cat "$ZIP.sha256"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
