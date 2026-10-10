@@ -12,7 +12,7 @@ struct BatteryLabel: View {
 
     private var content: some View {
         HStack(spacing: 3) {
-            Image(systemName: BatteryPresentation.symbolName(for: state))
+            Image(systemName: isLow ? Theme.Symbol.low : BatteryPresentation.symbolName(for: state))
             if state.freshness == .asleep {
                 Image(systemName: Theme.Symbol.asleep)
             }

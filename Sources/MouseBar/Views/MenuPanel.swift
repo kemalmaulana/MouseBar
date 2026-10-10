@@ -105,7 +105,11 @@ struct MenuPanel: View {
                             if case .choice(let c)? = model.values[spec.key] ?? DefaultSettings.value(for: spec) { return c }
                             return spec.defaultText
                         },
-                        set: { model.submit(spec.key, .choice($0)) }
+                        set: { new in
+                            // Re-picking the shown value is not a change: don't write it.
+                            if case .choice(let shown)? = currentValue(spec, model), shown == new { return }
+                            model.submit(spec.key, .choice(new))
+                        }
                     )) {
                         ForEach(spec.choices ?? [], id: \.key) { choice in
                             Text(ValueFormat.choice(key: spec.key, choice.key)).tag(choice.key)
