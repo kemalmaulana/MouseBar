@@ -75,7 +75,11 @@ struct RangeEditor: View {
         let range = spec.inputRange ?? [0, 1, 1]
         HStack(spacing: Theme.Space.m) {
             Slider(value: $draft, in: Double(range[0])...Double(range[1]), step: Double(range[2])) { editing in
-                if !editing { model.submit(spec.key, .int(Int(draft))) }
+                guard !editing else { return }
+                // A bare click on the thumb ends an "edit" without moving it: don't write an unchanged value.
+                let newValue = Int(draft)
+                if case .int(let shown)? = currentValue(spec, model), shown == newValue { return }
+                model.submit(spec.key, .int(newValue))
             }
             .accessibilityLabel(SettingsLayout.label(for: spec))
             .accessibilityValue(ValueFormat.range(key: spec.key, value: Int(draft)))
@@ -134,7 +138,10 @@ struct DPIEditor: View {
                     }
                 ), in: Double(bounds[0])...Double(bounds[1]), step: Double(bounds[2])) { editing in
                     guard !editing, drafts.count == presets.count else { return }
-                    commit(drafts.map { Int($0) }, selected: selected)
+                    // A bare click on the thumb ends an "edit" without moving it: don't rewrite the presets.
+                    let next = drafts.map { Int($0) }
+                    if next == presets { return }
+                    commit(next, selected: selected)
                 }
                 .accessibilityLabel("Preset \(index + 1)")
                 .accessibilityValue(ValueFormat.dpi(value(at: index)))
@@ -156,6 +163,8 @@ struct DPIEditor: View {
                         commit(presets, selected: index)
                     } label: {
                         Image(systemName: index == selected ? "star.fill" : "star")
+                            .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
                     .help("Make preset \(index + 1) the active preset")
@@ -168,6 +177,8 @@ struct DPIEditor: View {
                     commit(next, selected: selected > index ? selected - 1 : selected)
                 } label: {
                     Image(systemName: "minus.circle")
+                        .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
                 .disabled(presets.count <= 1)
@@ -177,9 +188,12 @@ struct DPIEditor: View {
         .onAppear { drafts = presets.map(Double.init) }
         .onChange(of: model.values[spec.key]) { _, _ in drafts = presets.map(Double.init) }
         Button {
+            guard presets.count < maxCount else { return }
             commit(presets + [min(presets.last ?? 800, bounds[1])], selected: selected)
         } label: {
             Label("Add preset", systemImage: "plus.circle")
+                .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .disabled(presets.count >= maxCount)
