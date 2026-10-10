@@ -36,7 +36,7 @@ public struct BatteryState: Equatable, Sendable {
 
 public actor BatteryMonitor {
     private let device: MouseDevice
-    private let interval: Duration
+    private var interval: Duration
     private let sleeper: any Sleeper
     private let now: @Sendable () -> Date
     private var state = BatteryState.connecting
@@ -51,6 +51,11 @@ public actor BatteryMonitor {
         self.interval = interval
         self.sleeper = sleeper
         self.now = now
+    }
+
+    /// Takes effect at the next sleep of the polling loop.
+    public func setInterval(_ interval: Duration) {
+        self.interval = interval
     }
 
     public func pollOnce() async -> BatteryState {

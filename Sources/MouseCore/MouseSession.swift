@@ -14,6 +14,8 @@ public actor MouseSession {
     private var draining = false
     private var lastFreshness: BatteryState.Freshness?
     private var onError: (@Sendable (String) async -> Void)?
+    private let saveReporter: SaveReporter
+    private var batteryWatcher: (@Sendable (BatteryState) async -> Void)?
 
     public init(
         mouse: ConnectedMouse,
@@ -28,8 +30,10 @@ public actor MouseSession {
         self.store = store
         self.encoder = encoder
         let device = mouse.device
+        let reporter = SaveReporter()
+        self.saveReporter = reporter
         self.debouncer = SaveDebouncer(delay: saveDelay, sleeper: sleeper) {
-            try? await device.save()
+            try? await reporter.run { try await device.save() }
         }
         self.monitor = BatteryMonitor(device: device, interval: pollInterval, sleeper: sleeper, now: now)
     }
@@ -64,6 +68,7 @@ public actor MouseSession {
             await self?.batteryChanged(to: state)
             await forward(state)
         }
+        batteryWatcher = watched
         monitorTask = Task { await monitor.run(watched) }
         return errors
     }
@@ -116,9 +121,43 @@ public actor MouseSession {
         await debouncer.flush()
     }
 
+    /// Receives `.saving` / `.saved` / `.failed` for every save to the mouse (debounced or `saveNow`).
+    public func setSaveObserver(_ observer: (@Sendable (SaveState) async -> Void)?) async {
+        await saveReporter.setObserver(observer)
+    }
+
+    /// Validates and writes one value to the mouse without remembering it or scheduling a save.
+    /// Used by the hardware check for test writes that are undone afterwards.
+    public func applyTransient(_ key: String, _ value: SettingValue) async throws {
+        guard let spec = mouse.family.setting(key) else { throw MouseCoreError.unknownSetting(key) }
+        try validate(spec, value)
+        try await mouse.device.apply(key, value)
+    }
+
+    /// Saves the mouse's current configuration to its memory now, reporting progress like the debounced save.
+    public func saveNow() async throws {
+        let device = mouse.device
+        try await saveReporter.run { try await device.save() }
+    }
+
+    /// Changes how often the battery is polled; restarts the loop so the new interval applies at once.
+    public func setPollInterval(_ interval: Duration) async {
+        await monitor.setInterval(interval)
+        guard let watched = batteryWatcher, monitorTask != nil else { return }
+        monitorTask?.cancel()
+        let monitor = self.monitor
+        monitorTask = Task { await monitor.run(watched) }
+    }
+
+    /// The raw battery reply (hardware check diagnostics).
+    public func rawBatteryQuery() async throws -> [UInt8]? {
+        try await mouse.device.rawBatteryQuery()
+    }
+
     public func stop() {
         monitorTask?.cancel()
         monitorTask = nil
+        batteryWatcher = nil
     }
 
     /// Rejects values that must never reach the device (a button remap with no left click).
