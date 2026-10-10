@@ -37,6 +37,7 @@ struct ButtonActionMenu: View {
             Text(currentTitle)
         }
         .fixedSize()
+        .frame(minHeight: Theme.minHitTarget)
         .popover(isPresented: $showKeys, arrowEdge: .trailing) {
             KeyPickerPopover(keys: layouts.keyboardKeys) { key in
                 onChange(key.lowercased())

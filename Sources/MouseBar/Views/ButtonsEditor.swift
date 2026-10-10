@@ -16,7 +16,11 @@ struct ButtonsEditor: View {
 
     private func set(_ button: ButtonSpec, to token: String) {
         var assignments = mapping.assignments
-        assignments[button.name.lowercased()] = token
+        if token == "default" {
+            assignments.removeValue(forKey: button.name.lowercased())
+        } else {
+            assignments[button.name.lowercased()] = token
+        }
         model.submit(spec.key, .buttons(ButtonMapping(assignments: assignments)))
     }
 
@@ -53,6 +57,7 @@ struct ButtonsEditor: View {
                 Button("Restore defaults") {
                     model.submit(spec.key, .buttons(ButtonMapping()))
                 }
+                .frame(minHeight: Theme.minHitTarget)
                 .padding(.top, Theme.Space.s)
             }
         }
