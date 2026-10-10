@@ -9,6 +9,19 @@ public enum MouseCoreError: Error, Equatable, Sendable {
     case noPrimaryClick
 }
 
+extension MouseCoreError: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .noPrimaryClick: "Keep Left click mapped to a working button, or you won't be able to click."
+        case .invalidValue(let message): message
+        case .unknownSetting(let key): "Unknown setting \(key)"
+        case .unsupportedValueType(let type): "Unsupported setting type \(type)"
+        case .valueMismatch(let setting, let expected): "\(setting) expects \(expected)"
+        case .overflow: "Value out of range"
+        }
+    }
+}
+
 enum Bytes {
     /// `value` as `length` little-endian bytes. Mirrors rivalcfg `uint_to_little_endian_bytearray`.
     static func littleEndian(_ value: Int, length: Int) throws -> [UInt8] {
