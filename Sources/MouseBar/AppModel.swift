@@ -151,6 +151,13 @@ final class AppModel {
         )
         values = await session.currentValues
         if !errors.isEmpty { problem = errors.joined(separator: "\n") }
+        if isCheckRunning {
+            // The check switched connections (cable <-> dongle): keep its fast battery polling on the new session.
+            await session.setPollInterval(.seconds(5))
+        } else {
+            // A check interrupted by a crash or force quit left a snapshot: put the owner's settings back once.
+            await CheckRunner.shared.restoreIfInterrupted()
+        }
     }
 
     // A stopped session can still deliver an already-queued callback; only the active mouse may update the UI.
