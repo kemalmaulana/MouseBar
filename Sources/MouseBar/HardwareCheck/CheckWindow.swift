@@ -7,6 +7,8 @@ struct CheckWindow: View {
     let model: AppModel
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// False for 300 ms after every phase change, so a stray click or Return cannot answer the next prompt.
+    @State private var inputReady = false
 
     private var showsProgress: Bool {
         switch runner.phase {
@@ -27,7 +29,8 @@ struct CheckWindow: View {
                 .themedAnimation(runner.phaseToken, reduceMotion: reduceMotion)
             Divider()
             footer
-                .padding(Theme.Space.l)
+                .padding(.horizontal, Theme.windowPadding)
+                .padding(.vertical, Theme.Space.l)
         }
         .frame(width: 560, height: 520)
         .overlay {
@@ -38,7 +41,21 @@ struct CheckWindow: View {
                 }
             }
         }
-        .onDisappear { runner.cancel() }
+        .task(id: runner.phaseToken) {
+            inputReady = false
+            try? await Task.sleep(for: .milliseconds(300))
+            if !Task.isCancelled { inputReady = true }
+        }
+        .onAppear { runner.reset() }
+        .onDisappear {
+            runner.cancel()
+            runner.reset()
+        }
+    }
+
+    /// Start is allowed with a connected mouse and button remaps that keep a working primary click.
+    private var canStart: Bool {
+        model.family != nil && CheckPreflightView.buttonsError(runner: runner, model: model) == nil
     }
 
     private var header: some View {
@@ -68,9 +85,9 @@ struct CheckWindow: View {
         case .preflight:
             CheckPreflightView(runner: runner, model: model)
         case .results:
-            CheckResultsView(runner: runner)
+            CheckResultsView(runner: runner, model: model)
         default:
-            CheckStepCard(runner: runner)
+            CheckStepCard(runner: runner, acceptsAnswers: inputReady)
         }
     }
 
@@ -82,6 +99,7 @@ struct CheckWindow: View {
                 .accessibilityHidden(true)
             Text("Hardware Check")
                 .font(.title3.weight(.semibold))
+            CheckBanners(model: model)
             Text("Checks that MouseBar's changes really reach your mouse: battery over the cable and the dongle, LED color, polling rate, buttons, DPI, saving, and wake. Takes about 5 minutes. Your settings are put back at the end.")
                 .font(.callout)
                 .multilineTextAlignment(.center)
@@ -118,20 +136,38 @@ struct CheckWindow: View {
     @ViewBuilder private var primaryButton: some View {
         switch runner.phase {
         case .idle:
-            Button("Get started") { runner.start() }
+            Button("Get started") {
+                runner.reset()
+                runner.start()
+            }
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.family == nil)
         case .preflight:
             Button("Start check") { runner.beginTests() }
-                .keyboardShortcut(.defaultAction)
+                .disabled(!canStart)
         case .instructions(_, let title):
             Button(title) { runner.proceed() }
                 .keyboardShortcut(.defaultAction)
+                .disabled(!inputReady)
         case .results:
             Button("Done") { dismissWindow(id: "hardware-check") }
                 .keyboardShortcut(.defaultAction)
         default:
             EmptyView()
+        }
+    }
+}
+
+/// The app's last problem and notice, shown on the welcome and results cards until dismissed.
+struct CheckBanners: View {
+    let model: AppModel
+
+    var body: some View {
+        if let problem = model.problem {
+            StatusBanner(style: .error, message: problem, onDismiss: { model.problem = nil })
+        }
+        if let notice = model.notice {
+            StatusBanner(style: .info, message: notice, onDismiss: { model.notice = nil })
         }
     }
 }

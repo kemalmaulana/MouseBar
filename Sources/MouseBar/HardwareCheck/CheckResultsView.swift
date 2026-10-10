@@ -4,10 +4,12 @@ import MouseCore
 
 struct CheckResultsView: View {
     let runner: CheckRunner
+    let model: AppModel
     @State private var expanded: Set<CheckStepID> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
+            CheckBanners(model: model)
             Text("Results")
                 .font(.title3.weight(.semibold))
             ScrollView {
@@ -53,9 +55,15 @@ struct CheckResultsView: View {
                 Text(step.title)
                 Spacer()
                 if step != .preflight {
-                    Button("Run again") { runner.rerun(step) }
-                        .controlSize(.small)
-                        .disabled(runner.isRunning)
+                    Button {
+                        runner.rerun(step)
+                    } label: {
+                        Text("Run again")
+                            .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .controlSize(.small)
+                    .disabled(runner.isRunning)
                 }
             }
         }

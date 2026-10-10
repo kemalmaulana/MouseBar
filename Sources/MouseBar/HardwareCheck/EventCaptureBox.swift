@@ -33,29 +33,70 @@ struct EventCaptureBox: NSViewRepresentable {
 }
 
 final class CaptureView: NSView {
-    var mode: EventCaptureBox.Mode = .measure(seconds: 3)
+    /// Views that currently hold coalescing off. The app-wide setting is saved on 0 -> 1 and restored on 1 -> 0,
+    /// so overlapping or back-to-back measure views leave it as they found it.
+    private static var coalescingUsers = 0
+    private static var originalCoalescing = true
+
+    var mode: EventCaptureBox.Mode = .measure(seconds: 3) {
+        didSet { syncCoalescing() }
+    }
     var onTimestamps: (([Double]) -> Void)?
     var onKey: (() -> Void)?
     var onLive: ((Double?) -> Void)?
     private var timestamps: [Double] = []
     private var startedAt: TimeInterval?
     private var finished = false
-    private var savedCoalescing: Bool?
+    private var holdsCoalescing = false
     private var tracking: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
 
+    isolated deinit {
+        releaseCoalescing()
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { releaseCoalescing() }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let window {
-            // Coalescing merges mouse moves; it must be off to count the mouse's real report rate.
-            savedCoalescing = NSEvent.isMouseCoalescingEnabled
-            NSEvent.isMouseCoalescingEnabled = false
             window.acceptsMouseMovedEvents = true
             window.makeFirstResponder(self)
-        } else if let saved = savedCoalescing {
-            NSEvent.isMouseCoalescingEnabled = saved
-            savedCoalescing = nil
+        }
+        syncCoalescing()
+    }
+
+    /// Coalescing merges mouse moves; it must be off to count the mouse's real report rate (measure mode only).
+    private func syncCoalescing() {
+        var measuring = false
+        if case .measure = mode { measuring = true }
+        if window != nil && measuring {
+            acquireCoalescing()
+        } else {
+            releaseCoalescing()
+        }
+    }
+
+    private func acquireCoalescing() {
+        guard !holdsCoalescing else { return }
+        holdsCoalescing = true
+        if Self.coalescingUsers == 0 {
+            Self.originalCoalescing = NSEvent.isMouseCoalescingEnabled
+            NSEvent.isMouseCoalescingEnabled = false
+        }
+        Self.coalescingUsers += 1
+    }
+
+    private func releaseCoalescing() {
+        guard holdsCoalescing else { return }
+        holdsCoalescing = false
+        Self.coalescingUsers -= 1
+        if Self.coalescingUsers == 0 {
+            NSEvent.isMouseCoalescingEnabled = Self.originalCoalescing
         }
     }
 

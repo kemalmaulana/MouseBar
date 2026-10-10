@@ -82,6 +82,18 @@ final class CheckRunner {
         }
     }
 
+    /// Back to a fresh welcome card (the window was closed or a new check starts). Does nothing while a check or a
+    /// restore is in flight.
+    func reset() {
+        guard runTask == nil, !isRestoring else { return }
+        outcomes = [:]
+        reportURL = nil
+        reportMarkdown = nil
+        lastSnapshot = nil
+        stepIndex = 0
+        setPhase(.idle)
+    }
+
     /// Preflight -> writes the restore snapshot, then runs every step.
     func beginTests() {
         guard runTask == nil, !isRestoring, let session = model.activeSession else { return }

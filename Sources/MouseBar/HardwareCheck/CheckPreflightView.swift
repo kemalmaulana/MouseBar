@@ -6,6 +6,20 @@ struct CheckPreflightView: View {
     @Bindable var runner: CheckRunner
     let model: AppModel
 
+    /// Why the entered button remaps cannot be restored (nil when they are fine or not used).
+    static func buttonsError(runner: CheckRunner, model: AppModel) -> String? {
+        guard !runner.useFactoryDefaults, let spec = model.family?.setting("buttons_mapping") else { return nil }
+        do {
+            try SettingEncoder(layouts: model.layouts).validateButtons(runner.enteredButtons, spec: spec)
+            return nil
+        } catch MouseCoreError.noPrimaryClick {
+            let primary = spec.buttons?.first.map { ButtonNames.name($0.name) } ?? "The primary button"
+            return "Keep \(primary) mapped to a working button, or you won't be able to click."
+        } catch {
+            return "These button remaps are not valid."
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -19,6 +33,9 @@ struct CheckPreflightView: View {
                     GroupBox("DPI presets") { presetsEditor }
                     if let spec = model.family?.setting("buttons_mapping") {
                         GroupBox("Button remaps") { buttonsEditor(spec) }
+                    }
+                    if let problem = Self.buttonsError(runner: runner, model: model) {
+                        StatusBanner(style: .warning, message: problem)
                     }
                 }
             }
@@ -45,6 +62,8 @@ struct CheckPreflightView: View {
                         runner.enteredPresets.remove(at: index)
                     } label: {
                         Image(systemName: "minus.circle")
+                            .frame(minWidth: Theme.minHitTarget, minHeight: Theme.minHitTarget)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
                     .disabled(runner.enteredPresets.count <= 1)
@@ -55,6 +74,8 @@ struct CheckPreflightView: View {
                 runner.enteredPresets.append(min(runner.enteredPresets.last ?? 800, 18000))
             } label: {
                 Label("Add preset", systemImage: "plus.circle")
+                    .frame(minHeight: Theme.minHitTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .disabled(runner.enteredPresets.count >= 5)

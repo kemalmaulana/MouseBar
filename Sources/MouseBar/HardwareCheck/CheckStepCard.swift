@@ -20,6 +20,8 @@ extension CheckStepID {
 /// The current step: symbol, title, and the phase's interaction area.
 struct CheckStepCard: View {
     let runner: CheckRunner
+    /// False for a moment after each phase change, so a stray click cannot answer the next question.
+    let acceptsAnswers: Bool
 
     private var step: CheckStepID {
         let all = CheckStepID.allCases
@@ -52,9 +54,11 @@ struct CheckStepCard: View {
                 HStack(spacing: Theme.Space.m) {
                     Button("No") { runner.answer(false) }
                         .controlSize(.large)
+                        .disabled(!acceptsAnswers)
                     Button("Yes") { runner.answer(true) }
                         .controlSize(.large)
                         .buttonStyle(.borderedProminent)
+                        .disabled(!acceptsAnswers)
                 }
             }
         case .measure(let text, let seconds):
