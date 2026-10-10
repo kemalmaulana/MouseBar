@@ -20,5 +20,9 @@ struct MouseBarApp: App {
             SettingsView(model: model)
         }
         .windowResizability(.contentSize)
+        Window("Hardware Check", id: "hardware-check") {
+            CheckWindow(runner: CheckRunner.shared, model: model)
+        }
+        .windowResizability(.contentSize)
     }
 }

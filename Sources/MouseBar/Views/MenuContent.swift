@@ -19,6 +19,10 @@ struct MenuContent: View {
             Text(problem)
         }
         Divider()
+        Button("Hardware Check…") {
+            openWindow(id: "hardware-check")
+            NSApp.activate(ignoringOtherApps: true)
+        }
         Button("Settings…") {
             openWindow(id: "settings")
             NSApp.activate(ignoringOtherApps: true)
