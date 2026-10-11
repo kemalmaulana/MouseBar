@@ -37,6 +37,7 @@ enum SettingsLayout {
     }
 
     static let entries: [String: Entry] = [
+        "dpi": Entry(tab: .performance, order: 0, label: "DPI"),
         "sensitivity": Entry(tab: .performance, order: 0, label: "DPI presets"),
         "polling_rate": Entry(tab: .performance, order: 1, label: "Polling rate"),
         "buttons_mapping": Entry(tab: .buttons, order: 0, label: "Buttons"),
@@ -50,6 +51,13 @@ enum SettingsLayout {
         family.settings
             .filter { entries[$0.key]?.tab == tab }
             .sorted { (entries[$0.key]?.order ?? 0) < (entries[$1.key]?.order ?? 0) }
+    }
+
+    /// The tabs worth showing: a tab with no settings for this mouse is hidden. Device always shows.
+    static func visibleTabs(in family: DeviceFamily?) -> [SettingsTab] {
+        SettingsTab.allCases.filter { tab in
+            tab == .device || family.map { !settings(for: tab, in: $0).isEmpty } ?? false
+        }
     }
 
     static func otherSettings(in family: DeviceFamily) -> [SettingSpec] {
@@ -83,6 +91,7 @@ enum ValueFormat {
         switch key {
         case "sleep_timer": value == 0 ? "Never" : "\(value) min"
         case "dim_timer": seconds(value)
+        case "dpi": dpi(value)
         default: "\(value)"
         }
     }

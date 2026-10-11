@@ -8,6 +8,14 @@ struct DeviceTab: View {
     @State private var confirmReset = false
     @Environment(\.openWindow) private var openWindow
 
+    /// What talks to the mouse, with the version of the data behind it.
+    private var protocolDescription: String {
+        if model.activeVendorID == AppModel.logitechVendorID {
+            return "Logitech HID++ (OpenLogi \(model.logiRevision ?? "—"))"
+        }
+        return "SteelSeries (rivalcfg profiles \(model.rivalcfgVersion))"
+    }
+
     var body: some View {
         Section("Mouse") {
             LabeledContent("Model", value: model.displayName ?? "—")
@@ -19,7 +27,7 @@ struct DeviceTab: View {
                 }
             }
             LabeledContent("Battery", value: BatteryPresentation.detail(for: model.battery, now: Date()))
-            LabeledContent("Profile", value: "rivalcfg \(model.rivalcfgVersion)")
+            LabeledContent("Protocol", value: protocolDescription)
         }
         Section("Menu bar") {
             Toggle("Show battery percentage", isOn: $showPercentage)
@@ -32,10 +40,12 @@ struct DeviceTab: View {
                 }
             }
         }
-        Section("Diagnostics") {
-            Button("Hardware Check…") {
-                openWindow(id: "hardware-check")
-                NSApp.activate(ignoringOtherApps: true)
+        if model.supportsHardwareCheck {
+            Section("Diagnostics") {
+                Button("Hardware Check…") {
+                    openWindow(id: "hardware-check")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
             }
         }
         Section {

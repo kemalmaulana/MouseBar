@@ -17,6 +17,8 @@ final class AppModel {
     static let isDemo = CommandLine.arguments.contains("--demo")
     private static let activePresetKey = "activePresetConfirmed"
     private static let activeMouseKey = "activeMouse"
+    static let steelSeriesVendorID = 0x1038
+    static let logitechVendorID = 0x046D
 
     enum ConnectionKind: Equatable {
         case cable, dongle
@@ -31,7 +33,8 @@ final class AppModel {
     var values: [String: SettingValue] = [:]
     var problem: String?
     var notice: String?
-    var ggWarning = false
+    /// Display names of vendor apps running now that can fight MouseBar (`ConflictDetector`); checked once at launch.
+    private(set) var conflictingApps: [String] = []
     var connection: ConnectionKind?
     /// The distinct physical mice connected right now, for the panel's picker.
     private(set) var mice: [MouseChoice] = []
@@ -40,8 +43,12 @@ final class AppModel {
     /// Settings the active mouse reports itself: their values are live, so no "Default" capsule.
     private(set) var readableKeys: Set<String> = []
     var saveState: SaveState?
+    /// `DeviceModel.vendorId` of the active mouse.
+    private(set) var activeVendorID: Int?
+    /// OpenLogi's short revision, once `LogiFFI.version()` has answered; nil in demo mode.
+    private(set) var logiRevision: String?
     /// True while the hardware check runs; Settings and the panel's quick controls are disabled.
-    var isCheckRunning = false
+    private(set) var isCheckRunning = false
     /// Set by the hardware check when switching the active DPI preset was confirmed on the mouse.
     private(set) var activePresetConfirmed: Bool
     let layouts: ButtonLayouts
@@ -59,6 +66,7 @@ final class AppModel {
     /// Feeds the one loop that handles every backend's events and every picker choice, one at a time.
     private var inputs: AsyncStream<Input>.Continuation?
     private var started = false
+    private var logiVersionRequested = false
     /// The latest resync per setting key; a newer edit of the same key cancels the older waiter.
     private var resyncTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var saveClearTask: Task<Void, Never>?
@@ -90,6 +98,10 @@ final class AppModel {
     var rivalcfgVersion: String { catalog.rivalcfgVersion }
     /// The session of the active mouse (the hardware check drives it directly).
     var activeSession: MouseSession? { session }
+    /// True when GG's engine runs (the hardware check's welcome card warns about it).
+    var ggWarning: Bool { conflictingApps.contains(ConflictDetector.steelSeriesGG) }
+    /// The hardware check is for SteelSeries mice only; with no mouse connected there is nothing to hide it for.
+    var supportsHardwareCheck: Bool { activeVendorID.map { $0 == Self.steelSeriesVendorID } ?? true }
 
     static func shortName(_ name: String) -> String {
         var result = name
@@ -115,7 +127,10 @@ final class AppModel {
     func start() {
         guard !started else { return }
         started = true
-        ggWarning = GGDetector.isEngineRunning()
+        // Each check spawns pgrep, so keep it off the main thread.
+        Task {
+            conflictingApps = await Task.detached(priority: .utility) { ConflictDetector.runningApps() }.value
+        }
         // Every backend and the picker feed one stream that one loop drains. Handling an input suspends
         // (a session stops and starts), so separate loops could interleave and race on the active mouse.
         let (stream, inputs) = AsyncStream.makeStream(of: Input.self)
@@ -203,6 +218,14 @@ final class AppModel {
         inputs?.yield(.reselect)
     }
 
+    /// Called by the hardware check. When it ends, the preferred mouse is looked at again: it may have connected
+    /// meanwhile, and `selectActive` kept the checked mouse until now.
+    func setCheckRunning(_ running: Bool) {
+        let ended = isCheckRunning && !running
+        isCheckRunning = running
+        if ended { inputs?.yield(.reselect) }
+    }
+
     /// True when the UI shows the factory default: MouseBar never set the value and the mouse can't report it.
     func isFactoryDefault(_ key: String) -> Bool {
         values[key] == nil && !readableKeys.contains(key)
@@ -252,6 +275,7 @@ final class AppModel {
         session = nil
         activeID = chosen?.hidID
         activeMouseID = chosen?.model.mouse
+        activeVendorID = chosen?.model.vendorId
         values = [:]
         readableKeys = []
         problem = nil
@@ -263,6 +287,7 @@ final class AppModel {
             connection = nil
             return
         }
+        if chosen.model.vendorId == Self.logitechVendorID { loadLogiRevision() }
         battery = .connecting
         mouseName = chosen.model.name
         family = chosen.family
@@ -286,6 +311,20 @@ final class AppModel {
         } else {
             // A check interrupted by a crash or force quit left a snapshot: put the owner's settings back once.
             await CheckRunner.shared.restoreIfInterrupted()
+        }
+    }
+
+    /// Fetches OpenLogi's revision once, for the Device tab. Demo mode never calls the library. The call is queued
+    /// behind any enumeration on the library's own queue, so it runs in a task and the Device tab shows "—" meanwhile.
+    private func loadLogiRevision() {
+        guard !Self.isDemo, logiRevision == nil, !logiVersionRequested else { return }
+        logiVersionRequested = true
+        Task {
+            if let version = try? await LogiFFI.version() {
+                logiRevision = String(version.openlogiRev.prefix(7))
+            } else {
+                logiVersionRequested = false   // try again the next time a Logitech mouse becomes active
+            }
         }
     }
 

@@ -4,10 +4,14 @@ import MouseCore
 /// Settings in toolbar tabs (a `Settings` scene renders `TabView` as toolbar tabs).
 struct SettingsView: View {
     let model: AppModel
+    @State private var selection: SettingsTab = .performance
 
     var body: some View {
-        TabView {
-            ForEach(SettingsTab.allCases) { tab in
+        let tabs = SettingsLayout.visibleTabs(in: model.family)
+        // The selected tab can vanish when the active mouse changes: fall back to Performance, else Device.
+        let shown = tabs.contains(selection) ? selection : (tabs.contains(.performance) ? .performance : .device)
+        TabView(selection: Binding(get: { shown }, set: { selection = $0 })) {
+            ForEach(tabs) { tab in
                 SettingsTabPage(model: model, tab: tab)
                     .tabItem { Label(tab.title, systemImage: tab.symbol) }
                     .tag(tab)

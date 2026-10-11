@@ -128,7 +128,7 @@ final class CheckRunner {
             lastSnapshot = snap
             testWriteMade = false
             outcomes = [.preflight: StepOutcome(step: .preflight, result: .pass, detail: "Settings snapshot saved")]
-            model.isCheckRunning = true
+            model.setCheckRunning(true)
             await session.setPollInterval(.seconds(5))
             await runSteps(Array(CheckStepID.allCases.dropFirst()))
         }
@@ -153,7 +153,7 @@ final class CheckRunner {
             }
             snapshot = snap
             testWriteMade = false
-            model.isCheckRunning = true
+            model.setCheckRunning(true)
             await session.setPollInterval(.seconds(5))
             await runSteps([step])
         }
@@ -244,7 +244,7 @@ final class CheckRunner {
         }
         await restoreAll()
         writeReport()
-        model.isCheckRunning = false
+        model.setCheckRunning(false)
         interrupt = nil   // a Cancel that arrived during the restore must not reach the next run
         runTask = nil
         setPhase(.results)
@@ -582,9 +582,14 @@ final class CheckRunner {
     }
 
     /// The live session; a checkpoint first, so every step that writes stops on Cancel/Skip before its first write.
+    /// Once the snapshot exists, only the checked mouse qualifies: its test writes must never reach a fallback mouse
+    /// that became active after the checked one went away. (`activeMouseID` always belongs to `activeSession`.)
     private func activeSession() throws -> MouseSession {
         try checkpoint()
         guard let session = model.activeSession else { throw StepFailure(message: "No mouse connected.") }
+        if let checked = snapshot?.mouse, model.activeMouseID != checked {
+            throw StepFailure(message: "The checked mouse is not connected.")
+        }
         return session
     }
 

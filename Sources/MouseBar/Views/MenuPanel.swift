@@ -181,11 +181,8 @@ struct MenuPanel: View {
     }
 
     @ViewBuilder private var banners: some View {
-        if model.ggWarning {
-            StatusBanner(
-                style: .warning,
-                message: "SteelSeries GG is running and can interfere. Quit it, or uninstall it with “SteelSeries GG Uninstaller”."
-            )
+        ForEach(model.conflictingApps, id: \.self) { app in
+            StatusBanner(style: .warning, message: ConflictDetector.warning(for: app))
         }
         if let problem = model.problem {
             StatusBanner(style: .error, message: problem, onDismiss: { model.problem = nil })
@@ -214,13 +211,15 @@ struct MenuPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack {
-                Button {
-                    openWindow(id: "hardware-check")
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Text("Hardware Check…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
+                if model.supportsHardwareCheck {
+                    Button {
+                        openWindow(id: "hardware-check")
+                        NSApp.activate(ignoringOtherApps: true)
+                    } label: {
+                        Text("Hardware Check…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
+                    }
+                    Spacer()
                 }
-                Spacer()
                 Button {
                     // A menu bar app must activate first, or the Settings window opens behind other apps.
                     NSApp.activate(ignoringOtherApps: true)
@@ -229,6 +228,7 @@ struct MenuPanel: View {
                     Text("Settings…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
                 }
                 .keyboardShortcut(",")
+                if !model.supportsHardwareCheck { Spacer() }
             }
             Button {
                 NSApplication.shared.terminate(nil)
