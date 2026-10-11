@@ -63,6 +63,11 @@ final class CheckRunner {
     }
 
     var isRunning: Bool { runTask != nil }
+    /// "Run again" needs the mouse the last check ran on to be the active one, and it must be a SteelSeries mouse.
+    var canRerun: Bool {
+        guard let last = lastSnapshot else { return false }
+        return model.supportsHardwareCheck && model.activeMouseID == last.mouse
+    }
     var needsRestore: Bool { snapshot != nil }
     private var isRestoring: Bool { restoreDepth > 0 }
     private var snapshotURL: URL { RestoreSnapshot.fileURL(in: model.settingsDirectory) }
@@ -99,7 +104,7 @@ final class CheckRunner {
 
     /// Preflight -> writes the restore snapshot, then runs every step.
     func beginTests() {
-        guard runTask == nil, !isRestoring, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, model.supportsHardwareCheck, let session = model.activeSession else { return }
         let useFactory = useFactoryDefaults
         var presets = enteredPresets
         var buttons = enteredButtons
@@ -136,7 +141,8 @@ final class CheckRunner {
 
     /// Runs one step again (from the results screen), with the same snapshot and a full restore afterwards.
     func rerun(_ step: CheckStepID) {
-        guard runTask == nil, !isRestoring, step != .preflight, let last = lastSnapshot, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, step != .preflight, canRerun, let session = model.activeSession,
+              let last = lastSnapshot else { return }
         runTask = Task {
             // Settings changed since the first run (DPI presets, button remaps, stored values) are what gets restored.
             var snap = last
@@ -445,7 +451,8 @@ final class CheckRunner {
 
     /// Best effort: re-sends the owner's value for every key the step tested (not stored; saved to the mouse only for the save step).
     private func undoTestWrites(of step: CheckStepID) async {
-        guard testWriteMade, let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession else { return }
+        guard testWriteMade, let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession,
+              model.activeMouseID == snap.mouse else { return }   // another mouse may have taken over: leave it alone
         let family = await session.mouse.family
         let writes = snap.restoreWrites(family: family).filter { keys.contains($0.key) }
         for write in writes {

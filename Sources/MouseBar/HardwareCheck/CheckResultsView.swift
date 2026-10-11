@@ -10,6 +10,9 @@ struct CheckResultsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             CheckBanners(model: model)
+            if !runner.canRerun {
+                StatusBanner(style: .info, message: "Run again needs the mouse that was checked. Pick it in the menu bar panel.")
+            }
             Text("Results")
                 .font(.title3.weight(.semibold))
             ScrollView {
@@ -63,7 +66,7 @@ struct CheckResultsView: View {
                             .contentShape(Rectangle())
                     }
                     .controlSize(.small)
-                    .disabled(runner.isRunning)
+                    .disabled(runner.isRunning || !runner.canRerun)
                     .accessibilityLabel("Run \(step.title) again")
                 }
             }
