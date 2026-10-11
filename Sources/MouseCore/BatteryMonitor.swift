@@ -35,14 +35,14 @@ public struct BatteryState: Equatable, Sendable {
 }
 
 public actor BatteryMonitor {
-    private let device: MouseDevice
+    private let device: any MouseDriver
     private var interval: Duration
     private let sleeper: any Sleeper
     private let now: @Sendable () -> Date
     private var state = BatteryState.connecting
 
     public init(
-        device: MouseDevice,
+        device: any MouseDriver,
         interval: Duration,
         sleeper: any Sleeper,
         now: @escaping @Sendable () -> Date

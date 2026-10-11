@@ -2,9 +2,9 @@ public struct ConnectedMouse: Sendable {
     public let hidID: UInt64
     public let family: DeviceFamily
     public let model: DeviceModel
-    public let device: MouseDevice
+    public let device: any MouseDriver
 
-    public init(hidID: UInt64, family: DeviceFamily, model: DeviceModel, device: MouseDevice) {
+    public init(hidID: UInt64, family: DeviceFamily, model: DeviceModel, device: any MouseDriver) {
         self.hidID = hidID
         self.family = family
         self.model = model
