@@ -9,6 +9,11 @@ extern "C" {
 
 /* Every char * result is UTF-8 JSON {"ok": <value>} or {"error": "<message>"}. */
 
+/* Threading: calls are serialized process-wide, and each may block its thread
+ * for up to its budget once it runs (15 s for mb_logi_enumerate and
+ * mb_logi_read_battery, 5 s for the others; mb_logi_version and mb_logi_free
+ * return at once). Never call from the main thread. */
+
 /* {"ok":{"crate":"0.1.0","openlogi_rev":"<sha>"}}; free with mb_logi_free. */
 char *mb_logi_version(void);
 

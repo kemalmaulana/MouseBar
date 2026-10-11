@@ -5,10 +5,13 @@
 //! [`mb_logi_free`]. A device is addressed by the opaque `route` string that
 //! [`mb_logi_enumerate`] lists for it, passed back unchanged.
 //!
-//! Each call blocks the calling thread for at most five seconds.
+//! Calls are serialized process-wide. Each blocks the calling thread for up to
+//! its budget once it runs: 15 s for the enumerate-backed calls
+//! ([`mb_logi_enumerate`], [`mb_logi_read_battery`]), 5 s for the others.
 
 use std::ffi::{CStr, CString, c_char};
 
+use bridge::{DEVICE_BUDGET, SCAN_BUDGET};
 use openlogi_hid::DeviceRoute;
 use serde::Serialize;
 
@@ -59,7 +62,7 @@ pub extern "C" fn mb_logi_version() -> *mut c_char {
 /// `{"ok":[Device, …]}`: every paired device on this host.
 #[unsafe(no_mangle)]
 pub extern "C" fn mb_logi_enumerate() -> *mut c_char {
-    bridge::run(ops::enumerate)
+    bridge::run(SCAN_BUDGET, ops::enumerate)
 }
 
 /// `{"ok":Settings}`: DPI and report rate, each `null` when unsupported.
@@ -72,7 +75,9 @@ pub extern "C" fn mb_logi_enumerate() -> *mut c_char {
 pub unsafe extern "C" fn mb_logi_read_settings(route: *const c_char) -> *mut c_char {
     // SAFETY: forwarded from this function's contract.
     let route = unsafe { route_arg(route) };
-    bridge::run(|| async move { ops::read_settings(&route?).await })
+    bridge::run(DEVICE_BUDGET, || async move {
+        ops::read_settings(&route?).await
+    })
 }
 
 /// `{"ok":{"percent":80,"charging":false}}`, or `{"ok":null}` when the device
@@ -86,7 +91,10 @@ pub unsafe extern "C" fn mb_logi_read_settings(route: *const c_char) -> *mut c_c
 pub unsafe extern "C" fn mb_logi_read_battery(route: *const c_char) -> *mut c_char {
     // SAFETY: forwarded from this function's contract.
     let route = unsafe { route_arg(route) };
-    bridge::run(|| async move { ops::read_battery(&route?).await })
+    bridge::run(
+        SCAN_BUDGET,
+        || async move { ops::read_battery(&route?).await },
+    )
 }
 
 /// `{"ok":null}` once the device took the new sensor DPI.
@@ -99,7 +107,10 @@ pub unsafe extern "C" fn mb_logi_read_battery(route: *const c_char) -> *mut c_ch
 pub unsafe extern "C" fn mb_logi_set_dpi(route: *const c_char, dpi: u32) -> *mut c_char {
     // SAFETY: forwarded from this function's contract.
     let route = unsafe { route_arg(route) };
-    bridge::run(|| async move { ops::set_dpi(&route?, dpi).await })
+    bridge::run(
+        DEVICE_BUDGET,
+        || async move { ops::set_dpi(&route?, dpi).await },
+    )
 }
 
 /// `{"ok":null}` once the device took the new report interval;
@@ -116,7 +127,9 @@ pub unsafe extern "C" fn mb_logi_set_report_rate(
 ) -> *mut c_char {
     // SAFETY: forwarded from this function's contract.
     let route = unsafe { route_arg(route) };
-    bridge::run(|| async move { ops::set_report_rate(&route?, interval_ms).await })
+    bridge::run(DEVICE_BUDGET, || async move {
+        ops::set_report_rate(&route?, interval_ms).await
+    })
 }
 
 /// Releases a string this library returned. `NULL` is a no-op.

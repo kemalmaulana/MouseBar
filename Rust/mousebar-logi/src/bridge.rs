@@ -1,18 +1,34 @@
-//! The plumbing every exported function shares: one Tokio runtime, a call
-//! timeout, panic containment, and the `{"ok"}` / `{"error"}` JSON envelope.
+//! The plumbing every exported function shares: one Tokio runtime, one call
+//! at a time, a per-call time budget, panic containment, and the `{"ok"}` /
+//! `{"error"}` JSON envelope.
 
 use std::ffi::{CString, c_char};
 use std::future::Future;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
 use serde::Serialize;
 use tokio::runtime::{Builder, Runtime};
 
-/// Upper bound on one exported call, so a device that stops answering cannot
-/// hang the caller's thread.
-const CALL_TIMEOUT: Duration = Duration::from_secs(5);
+/// Budget of a call that addresses one device by route (settings reads,
+/// writes), so a device that stops answering cannot hang the caller's thread.
+pub(crate) const DEVICE_BUDGET: Duration = Duration::from_secs(5);
+
+/// Budget of a call that runs OpenLogi's one-shot enumerate (device list,
+/// battery). A cold Lightspeed pass can spend 1.5 s draining arrivals plus
+/// 3.5 s probing a slot, and the one-shot scan retries up to 4 passes.
+pub(crate) const SCAN_BUDGET: Duration = Duration::from_secs(15);
+
+/// Serializes calls process-wide. OpenLogi takes a per-receiver lock while it
+/// opens a route or probes (up to 8 s); an overlapping call in this process
+/// would spend its own budget waiting on that lock.
+///
+/// A std mutex held around `block_on`, not a Tokio one: callers already block
+/// their thread for the whole call, so waiting here keeps the wait outside
+/// the runtime and before the budget timer starts. It guards no data, so a
+/// panic that poisoned it is recovered from rather than wedging later calls.
+static CALLS: Mutex<()> = Mutex::new(());
 
 /// Runs every call. Built on first use and kept for the life of the process.
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
@@ -54,17 +70,19 @@ where
     encode(outcome)
 }
 
-/// Runs an async operation on the shared runtime under [`CALL_TIMEOUT`], with
-/// panics contained, and encodes its outcome.
-pub(crate) fn run<T, F, Fut>(operation: F) -> *mut c_char
+/// Runs an async operation on the shared runtime, one call at a time, within
+/// `budget` (counted from when this call holds [`CALLS`]), with panics
+/// contained, and encodes its outcome.
+pub(crate) fn run<T, F, Fut>(budget: Duration, operation: F) -> *mut c_char
 where
     T: Serialize,
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<T, String>>,
 {
     guarded(|| {
+        let _serial = CALLS.lock().unwrap_or_else(PoisonError::into_inner);
         runtime()?.block_on(async {
-            tokio::time::timeout(CALL_TIMEOUT, operation())
+            tokio::time::timeout(budget, operation())
                 .await
                 .unwrap_or_else(|_| Err("timed out".to_owned()))
         })
