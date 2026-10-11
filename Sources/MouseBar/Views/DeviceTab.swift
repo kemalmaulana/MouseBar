@@ -27,7 +27,7 @@ struct DeviceTab: View {
         let others = SettingsLayout.otherSettings(in: family)
         if !others.isEmpty {
             ForEach(others) { spec in
-                SettingSection(title: SettingsLayout.label(for: spec), isDefault: model.values[spec.key] == nil) {
+                SettingSection(title: SettingsLayout.label(for: spec), isDefault: model.isFactoryDefault(spec.key)) {
                     SettingEditor(model: model, spec: spec)
                 }
             }

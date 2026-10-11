@@ -37,9 +37,13 @@ struct MenuPanel: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text(model.displayName ?? "Mouse")
-                .font(.headline)
-                .lineLimit(1)
+            if model.mice.count > 1 {
+                mousePicker
+            } else {
+                Text(model.displayName ?? "Mouse")
+                    .font(.headline)
+                    .lineLimit(1)
+            }
             Spacer()
             if let connection = model.connection {
                 Label(connection.title, systemImage: connection.symbol)
@@ -50,6 +54,31 @@ struct MenuPanel: View {
                     .accessibilityLabel("Connected by \(connection.title)")
             }
         }
+    }
+
+    /// Shown only when more than one physical mouse is connected: the name of the active one opens the list.
+    private var mousePicker: some View {
+        Menu {
+            Picker("Mouse", selection: Binding(
+                get: { model.activeMouseID ?? "" },
+                set: { model.selectMouse($0) }
+            )) {
+                ForEach(model.mice) { mouse in
+                    Text(mouse.name).tag(mouse.id)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Text(model.displayName ?? "Mouse")
+                .font(.headline)
+                .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(minHeight: Theme.minHitTarget)
+        .disabled(model.isCheckRunning)
+        .accessibilityLabel("Active mouse: \(model.displayName ?? "none")")
+        .help("Choose which mouse MouseBar controls")
     }
 
     private var battery: some View {

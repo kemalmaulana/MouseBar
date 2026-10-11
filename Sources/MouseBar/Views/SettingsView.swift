@@ -35,7 +35,7 @@ struct SettingsTabPage: View {
                     } else {
                         ForEach(SettingsLayout.settings(for: tab, in: family)) { spec in
                             SettingSection(
-                                title: SettingsLayout.label(for: spec), isDefault: model.values[spec.key] == nil
+                                title: SettingsLayout.label(for: spec), isDefault: model.isFactoryDefault(spec.key)
                             ) {
                                 SettingEditor(model: model, spec: spec)
                             }

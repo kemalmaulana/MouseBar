@@ -40,6 +40,11 @@ public actor MouseSession {
 
     public var currentValues: [String: SettingValue] { values }
 
+    /// Settings the mouse reported itself at `start`: their values are live, not the factory default.
+    public private(set) var readableKeys: Set<String> = []
+    /// Keys whose value came from the mouse, not from the owner. They are shown but never written back.
+    private var liveOnly: Set<String> = []
+
     /// Re-applies saved values (in profile order, except DPI presets) and starts the battery loop.
     /// Returns human-readable errors for values that could not be applied.
     public func start(
@@ -63,6 +68,14 @@ public actor MouseSession {
                 errors.append("\(spec.label): \(error)")
             }
         }
+        // A mouse that can report its settings shows what it really has for anything MouseBar never set.
+        // The check runs after the await: an edit made while the read was pending is not overwritten.
+        let live = await mouse.device.readSettings()
+        readableKeys = Set(live.keys)
+        for (key, value) in live where values[key] == nil {
+            values[key] = value
+            liveOnly.insert(key)
+        }
         let monitor = self.monitor
         let forward = onBattery
         let watched: @Sendable (BatteryState) async -> Void = { [weak self] state in
@@ -81,6 +94,7 @@ public actor MouseSession {
         try validate(spec, value)
         try await mouse.device.apply(key, value)
         values[key] = value
+        liveOnly.remove(key)
         try await store.set(value, key: key, mouse: mouse.model.mouse)
         if spec.persistsOnDevice {
             await debouncer.schedule()
@@ -113,6 +127,7 @@ public actor MouseSession {
             try await mouse.device.apply(spec.key, value)
         }
         values = [:]
+        liveOnly = []
         try await store.clear(mouse: mouse.model.mouse)
         await debouncer.schedule()
     }
@@ -177,7 +192,8 @@ public actor MouseSession {
         lastFreshness = state.freshness
         guard previous == .asleep && state.freshness == .fresh else { return }
         for spec in mouse.family.settings where !spec.persistsOnDevice {
-            guard let value = values[spec.key] else { continue }
+            // A value only read from the mouse was never chosen by the owner: don't send it back.
+            guard let value = values[spec.key], !liveOnly.contains(spec.key) else { continue }
             do {
                 try validate(spec, value)
                 try await mouse.device.apply(spec.key, value)

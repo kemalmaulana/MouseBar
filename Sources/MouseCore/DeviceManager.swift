@@ -21,6 +21,19 @@ public enum DeviceEvent: Sendable {
 public enum ActiveMousePolicy {
     /// The cable beats the dongle (the mouse is charging and the path is direct); otherwise the earliest.
     public static func choose(from mice: [ConnectedMouse]) -> ConnectedMouse? {
+        choose(from: mice, preferred: nil)
+    }
+
+    /// The mouse the owner picked (a `DeviceModel.mouse` id) when it is connected, else the rule above.
+    /// Among the connections of the picked mouse the cable still beats the dongle.
+    public static func choose(from mice: [ConnectedMouse], preferred: String?) -> ConnectedMouse? {
+        if let preferred, let match = cableFirst(mice.filter { $0.model.mouse == preferred }) {
+            return match
+        }
+        return cableFirst(mice)
+    }
+
+    private static func cableFirst(_ mice: [ConnectedMouse]) -> ConnectedMouse? {
         mice.first(where: { !$0.model.isWireless }) ?? mice.first
     }
 }

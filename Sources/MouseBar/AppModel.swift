@@ -1,13 +1,22 @@
 import Foundation
 import MouseCore
 import MouseHID
+import MouseLogi
 import Observation
+
+/// One physical mouse in the panel's picker (a SteelSeries mouse over cable and dongle is one entry).
+struct MouseChoice: Identifiable, Equatable {
+    /// `DeviceModel.mouse`.
+    let id: String
+    let name: String
+}
 
 @MainActor @Observable
 final class AppModel {
     static let shared = AppModel()
     static let isDemo = CommandLine.arguments.contains("--demo")
     private static let activePresetKey = "activePresetConfirmed"
+    private static let activeMouseKey = "activeMouse"
 
     enum ConnectionKind: Equatable {
         case cable, dongle
@@ -24,6 +33,12 @@ final class AppModel {
     var notice: String?
     var ggWarning = false
     var connection: ConnectionKind?
+    /// The distinct physical mice connected right now, for the panel's picker.
+    private(set) var mice: [MouseChoice] = []
+    /// `DeviceModel.mouse` of the active mouse.
+    private(set) var activeMouseID: String?
+    /// Settings the active mouse reports itself: their values are live, so no "Default" capsule.
+    private(set) var readableKeys: Set<String> = []
     var saveState: SaveState?
     /// True while the hardware check runs; Settings and the panel's quick controls are disabled.
     var isCheckRunning = false
@@ -35,9 +50,14 @@ final class AppModel {
     private let catalog: ProfileCatalog
     private let store: SettingsStore
     private var manager: DeviceManager?
+    private var logitech: LogitechWatcher?
     private var session: MouseSession?
     private var activeID: UInt64?
     private var available: [ConnectedMouse] = []
+    /// The mouse the owner picked; kept in `UserDefaults` outside demo mode.
+    private var preferredMouse: String?
+    /// Feeds the one loop that handles every backend's events and every picker choice, one at a time.
+    private var inputs: AsyncStream<Input>.Continuation?
     private var started = false
     /// The latest resync per setting key; a newer edit of the same key cancels the older waiter.
     private var resyncTasks: [String: Task<Void, Never>] = [:]
@@ -56,6 +76,13 @@ final class AppModel {
         settingsDirectory = directory
         store = SettingsStore(directory: directory)
         activePresetConfirmed = Self.isDemo ? false : UserDefaults.standard.bool(forKey: Self.activePresetKey)
+        preferredMouse = Self.isDemo ? nil : UserDefaults.standard.string(forKey: Self.activeMouseKey)
+    }
+
+    private enum Input: Sendable {
+        case device(DeviceEvent)
+        /// The picker changed `preferredMouse`.
+        case reselect
     }
 
     /// "SteelSeries Prime Mini Wireless (2.4 GHz wireless mode)" -> "Prime Mini Wireless".
@@ -89,6 +116,10 @@ final class AppModel {
         guard !started else { return }
         started = true
         ggWarning = GGDetector.isEngineRunning()
+        // Every backend and the picker feed one stream that one loop drains. Handling an input suspends
+        // (a session stops and starts), so separate loops could interleave and race on the active mouse.
+        let (stream, inputs) = AsyncStream.makeStream(of: Input.self)
+        self.inputs = inputs
         let transport: any HIDTransport = Self.isDemo ? DemoTransport.make() : IOHIDTransport()
         let manager = DeviceManager(
             transport: transport, catalog: catalog,
@@ -97,19 +128,61 @@ final class AppModel {
         self.manager = manager
         Task {
             await manager.start()
+            var simulatedAdded = false
             for await event in manager.events {
-                await handle(event)
+                inputs.yield(.device(event))
+                // Demo only: a simulated G304 joins right after the simulated SteelSeries mouse,
+                // so the SteelSeries one is the active mouse first and the picker has two entries.
+                if Self.isDemo, !simulatedAdded, case .connected = event {
+                    simulatedAdded = true
+                    inputs.yield(.device(.connected(SimulatedLogitechDevice.connectedMouse())))
+                }
             }
         }
+        if !Self.isDemo {
+            // The vendor-defined HID++ interface of Logitech receivers. Matching does not open a device.
+            let watcher = LogitechWatcher(transport: IOHIDTransport(vendorID: 0x046D, usagePage: 0xFF00))
+            logitech = watcher
+            Task {
+                await watcher.start()
+                for await event in watcher.events {
+                    inputs.yield(.device(event))
+                }
+            }
+        }
+        Task {
+            for await input in stream {
+                switch input {
+                case .device(let event): await handle(event)
+                case .reselect: await selectActive()
+                }
+            }
+        }
+    }
+
+    /// Makes `id` (a `DeviceModel.mouse`) the active mouse and remembers the choice.
+    func selectMouse(_ id: String) {
+        guard mice.contains(where: { $0.id == id }) else { return }
+        preferredMouse = id
+        // A demo run must not change which mouse the real app picks.
+        if !Self.isDemo { UserDefaults.standard.set(id, forKey: Self.activeMouseKey) }
+        inputs?.yield(.reselect)
+    }
+
+    /// True when the UI shows the factory default: MouseBar never set the value and the mouse can't report it.
+    func isFactoryDefault(_ key: String) -> Bool {
+        values[key] == nil && !readableKeys.contains(key)
     }
 
     private func handle(_ event: DeviceEvent) async {
         switch event {
         case .connected(let mouse):
             available.append(mouse)
+            mice = Self.distinctMice(available)
             await selectActive()
         case .disconnected(let id):
             available.removeAll { $0.hidID == id }
+            mice = Self.distinctMice(available)
             await selectActive()
         case .openFailed(let info, let message):
             problem = "Could not open \(info.product ?? "the mouse"): \(message). "
@@ -117,15 +190,25 @@ final class AppModel {
         }
     }
 
+    private static func distinctMice(_ available: [ConnectedMouse]) -> [MouseChoice] {
+        var seen = Set<String>()
+        return available.compactMap { mouse in
+            guard seen.insert(mouse.model.mouse).inserted else { return nil }
+            return MouseChoice(id: mouse.model.mouse, name: shortName(mouse.model.name))
+        }
+    }
+
     private func selectActive() async {
-        let chosen = ActiveMousePolicy.choose(from: available)
+        let chosen = ActiveMousePolicy.choose(from: available, preferred: preferredMouse)
         guard chosen?.hidID != activeID else { return }
         for task in resyncTasks.values { task.cancel() }
         resyncTasks = [:]
         await session?.stop()
         session = nil
         activeID = chosen?.hidID
+        activeMouseID = chosen?.model.mouse
         values = [:]
+        readableKeys = []
         problem = nil
         saveState = nil
         guard let chosen else {
@@ -150,6 +233,7 @@ final class AppModel {
             onError: { [weak self] message in await self?.setProblem(message, from: id) }
         )
         values = await session.currentValues
+        readableKeys = await session.readableKeys
         if !errors.isEmpty { problem = errors.joined(separator: "\n") }
         if isCheckRunning {
             // The check switched connections (cable <-> dongle): keep its fast battery polling on the new session.
