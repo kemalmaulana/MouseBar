@@ -145,9 +145,7 @@ final class AppModel {
             logitech = watcher
             Task {
                 await watcher.start()
-                for await event in watcher.events {
-                    inputs.yield(.device(event))
-                }
+                await forwardLogitech(watcher.events, to: inputs)
             }
         }
         Task {
@@ -158,6 +156,42 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    /// A Logitech mouse whose settings arrive late is reported as `.disconnected(id)` and at once `.connected` with the
+    /// same id. Passing both on would make another mouse active in between (and re-apply its settings), so the
+    /// pair becomes the lone `.connected`, which `handle` applies in place. A disconnect that no connect follows
+    /// within a moment is a real one and goes on unchanged.
+    private func forwardLogitech(_ events: AsyncStream<DeviceEvent>, to inputs: AsyncStream<Input>.Continuation) async {
+        var held: UInt64?
+        var release: Task<Void, Never>?
+        func flush() {
+            release?.cancel()
+            release = nil
+            guard let id = held else { return }
+            held = nil
+            inputs.yield(.device(.disconnected(hidID: id)))
+        }
+        for await event in events {
+            if case .connected(let mouse) = event, mouse.hidID == held {
+                release?.cancel()
+                release = nil
+                held = nil
+                inputs.yield(.device(event))
+                continue
+            }
+            flush()
+            if case .disconnected(let id) = event {
+                held = id
+                release = Task {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if !Task.isCancelled { flush() }
+                }
+            } else {
+                inputs.yield(.device(event))
+            }
+        }
+        flush()
     }
 
     /// Makes `id` (a `DeviceModel.mouse`) the active mouse and remembers the choice.
@@ -177,9 +211,17 @@ final class AppModel {
     private func handle(_ event: DeviceEvent) async {
         switch event {
         case .connected(let mouse):
-            available.append(mouse)
+            // The same mouse again (its settings arrived late): swap it in place, keep its position, and restart
+            // only its own session, if it is the active one.
+            var replaced: UInt64?
+            if let index = available.firstIndex(where: { $0.hidID == mouse.hidID }) {
+                available[index] = mouse
+                replaced = mouse.hidID
+            } else {
+                available.append(mouse)
+            }
             mice = Self.distinctMice(available)
-            await selectActive()
+            await selectActive(restarting: replaced)
         case .disconnected(let id):
             available.removeAll { $0.hidID == id }
             mice = Self.distinctMice(available)
@@ -198,9 +240,12 @@ final class AppModel {
         }
     }
 
-    private func selectActive() async {
-        let chosen = ActiveMousePolicy.choose(from: available, preferred: preferredMouse)
-        guard chosen?.hidID != activeID else { return }
+    private func selectActive(restarting replaced: UInt64? = nil) async {
+        // A running hardware check owns its mouse: its test writes must not follow the stored preference to another
+        // one. Only the checked mouse going away (not just its cable or dongle) lets the active mouse change.
+        let checked = isCheckRunning && available.contains { $0.model.mouse == activeMouseID }
+        let chosen = ActiveMousePolicy.choose(from: available, preferred: checked ? activeMouseID : preferredMouse)
+        guard chosen?.hidID != activeID || (replaced != nil && replaced == activeID) else { return }
         for task in resyncTasks.values { task.cancel() }
         resyncTasks = [:]
         await session?.stop()
