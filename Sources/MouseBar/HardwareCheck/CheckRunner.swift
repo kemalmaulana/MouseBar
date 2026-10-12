@@ -63,6 +63,11 @@ final class CheckRunner {
     }
 
     var isRunning: Bool { runTask != nil }
+    /// "Run again" needs the mouse the last check ran on to be the active one, and it must be a SteelSeries mouse.
+    var canRerun: Bool {
+        guard let last = lastSnapshot else { return false }
+        return model.supportsHardwareCheck && model.activeMouseID == last.mouse
+    }
     var needsRestore: Bool { snapshot != nil }
     private var isRestoring: Bool { restoreDepth > 0 }
     private var snapshotURL: URL { RestoreSnapshot.fileURL(in: model.settingsDirectory) }
@@ -99,7 +104,7 @@ final class CheckRunner {
 
     /// Preflight -> writes the restore snapshot, then runs every step.
     func beginTests() {
-        guard runTask == nil, !isRestoring, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, model.supportsHardwareCheck, let session = model.activeSession else { return }
         let useFactory = useFactoryDefaults
         var presets = enteredPresets
         var buttons = enteredButtons
@@ -128,15 +133,17 @@ final class CheckRunner {
             lastSnapshot = snap
             testWriteMade = false
             outcomes = [.preflight: StepOutcome(step: .preflight, result: .pass, detail: "Settings snapshot saved")]
-            model.isCheckRunning = true
-            await session.setPollInterval(.seconds(5))
+            // The snapshot's mouse, not `activeMouseID`: another mouse may have become active during the awaits above.
+            model.setCheckRunning(true, mouse: snap.mouse)
+            await pollCheckedMouseFast()
             await runSteps(Array(CheckStepID.allCases.dropFirst()))
         }
     }
 
     /// Runs one step again (from the results screen), with the same snapshot and a full restore afterwards.
     func rerun(_ step: CheckStepID) {
-        guard runTask == nil, !isRestoring, step != .preflight, let last = lastSnapshot, let session = model.activeSession else { return }
+        guard runTask == nil, !isRestoring, step != .preflight, canRerun, let session = model.activeSession,
+              let last = lastSnapshot else { return }
         runTask = Task {
             // Settings changed since the first run (DPI presets, button remaps, stored values) are what gets restored.
             var snap = last
@@ -153,8 +160,8 @@ final class CheckRunner {
             }
             snapshot = snap
             testWriteMade = false
-            model.isCheckRunning = true
-            await session.setPollInterval(.seconds(5))
+            model.setCheckRunning(true, mouse: snap.mouse)
+            await pollCheckedMouseFast()
             await runSteps([step])
         }
     }
@@ -217,6 +224,15 @@ final class CheckRunner {
         }
     }
 
+    /// The check's fast battery polling, on the checked mouse's live session only: the session captured before the
+    /// awaits in `beginTests` / `rerun` may have been replaced by then, and another mouse's session never polls fast.
+    /// When the checked mouse is not active now, `selectActive` sets it on the session it starts for that mouse.
+    private func pollCheckedMouseFast() async {
+        guard let checked = snapshot?.mouse, model.activeMouseID == checked,
+              let session = model.activeSession else { return }
+        await session.setPollInterval(.seconds(5))
+    }
+
     // MARK: Step sequencing
 
     private func runSteps(_ steps: [CheckStepID]) async {
@@ -244,7 +260,7 @@ final class CheckRunner {
         }
         await restoreAll()
         writeReport()
-        model.isCheckRunning = false
+        model.setCheckRunning(false)
         interrupt = nil   // a Cancel that arrived during the restore must not reach the next run
         runTask = nil
         setPhase(.results)
@@ -445,7 +461,8 @@ final class CheckRunner {
 
     /// Best effort: re-sends the owner's value for every key the step tested (not stored; saved to the mouse only for the save step).
     private func undoTestWrites(of step: CheckStepID) async {
-        guard testWriteMade, let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession else { return }
+        guard testWriteMade, let keys = Self.stepKeys[step], let snap = snapshot, let session = model.activeSession,
+              model.activeMouseID == snap.mouse else { return }   // another mouse may have taken over: leave it alone
         let family = await session.mouse.family
         let writes = snap.restoreWrites(family: family).filter { keys.contains($0.key) }
         for write in writes {
@@ -582,9 +599,14 @@ final class CheckRunner {
     }
 
     /// The live session; a checkpoint first, so every step that writes stops on Cancel/Skip before its first write.
+    /// Once the snapshot exists, only the checked mouse qualifies: its test writes must never reach a fallback mouse
+    /// that became active after the checked one went away. (`activeMouseID` always belongs to `activeSession`.)
     private func activeSession() throws -> MouseSession {
         try checkpoint()
         guard let session = model.activeSession else { throw StepFailure(message: "No mouse connected.") }
+        if let checked = snapshot?.mouse, model.activeMouseID != checked {
+            throw StepFailure(message: "The checked mouse is not connected.")
+        }
         return session
     }
 

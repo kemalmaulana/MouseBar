@@ -1,0 +1,24 @@
+[package]
+name = "mousebar-logi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "C ABI (JSON strings) over OpenLogi's HID++ crates, linked by MouseBar as an xcframework."
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+openlogi-hid = { git = "https://github.com/AprilNEA/OpenLogi", rev = "0f69d75be99439da97291ff4163aba83dfc6df96" }
+openlogi-core = { git = "https://github.com/AprilNEA/OpenLogi", rev = "0f69d75be99439da97291ff4163aba83dfc6df96" }
+hidpp = { package = "openlogi-hidpp", git = "https://github.com/AprilNEA/OpenLogi", rev = "0f69d75be99439da97291ff4163aba83dfc6df96" }
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "debuginfo"

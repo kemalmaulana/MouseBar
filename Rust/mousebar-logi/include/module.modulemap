@@ -1,0 +1,4 @@
+module MouseBarLogiFFI {
+    header "mousebar_logi.h"
+    export *
+}

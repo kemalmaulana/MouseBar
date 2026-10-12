@@ -55,7 +55,7 @@ struct CheckWindow: View {
 
     /// Start is allowed with a connected mouse and button remaps that keep a working primary click.
     private var canStart: Bool {
-        model.family != nil && CheckPreflightView.buttonsError(runner: runner, model: model) == nil
+        model.family != nil && model.supportsHardwareCheck && CheckPreflightView.buttonsError(runner: runner, model: model) == nil
     }
 
     private var header: some View {
@@ -108,6 +108,8 @@ struct CheckWindow: View {
             }
             if model.family == nil {
                 StatusBanner(style: .info, message: "Connect your mouse with the USB cable to start.")
+            } else if !model.supportsHardwareCheck {
+                StatusBanner(style: .info, message: "The hardware check is for SteelSeries mice. Pick a SteelSeries mouse in the menu bar panel to start.")
             }
         }
     }
@@ -141,7 +143,7 @@ struct CheckWindow: View {
                 runner.start()
             }
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.family == nil)
+                .disabled(model.family == nil || !model.supportsHardwareCheck)
         case .preflight:
             Button("Start check") { runner.beginTests() }
                 .disabled(!canStart)

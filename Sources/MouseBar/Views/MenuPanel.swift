@@ -37,9 +37,13 @@ struct MenuPanel: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text(model.displayName ?? "Mouse")
-                .font(.headline)
-                .lineLimit(1)
+            if model.mice.count > 1 {
+                mousePicker
+            } else {
+                Text(model.displayName ?? "Mouse")
+                    .font(.headline)
+                    .lineLimit(1)
+            }
             Spacer()
             if let connection = model.connection {
                 Label(connection.title, systemImage: connection.symbol)
@@ -50,6 +54,31 @@ struct MenuPanel: View {
                     .accessibilityLabel("Connected by \(connection.title)")
             }
         }
+    }
+
+    /// Shown only when more than one physical mouse is connected: the name of the active one opens the list.
+    private var mousePicker: some View {
+        Menu {
+            Picker("Mouse", selection: Binding(
+                get: { model.activeMouseID ?? "" },
+                set: { model.selectMouse($0) }
+            )) {
+                ForEach(model.mice) { mouse in
+                    Text(mouse.name).tag(mouse.id)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Text(model.displayName ?? "Mouse")
+                .font(.headline)
+                .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(minHeight: Theme.minHitTarget)
+        .disabled(model.isCheckRunning)
+        .accessibilityLabel("Active mouse: \(model.displayName ?? "none")")
+        .help("Choose which mouse MouseBar controls")
     }
 
     private var battery: some View {
@@ -152,11 +181,8 @@ struct MenuPanel: View {
     }
 
     @ViewBuilder private var banners: some View {
-        if model.ggWarning {
-            StatusBanner(
-                style: .warning,
-                message: "SteelSeries GG is running and can interfere. Quit it, or uninstall it with “SteelSeries GG Uninstaller”."
-            )
+        ForEach(model.conflictingApps, id: \.self) { app in
+            StatusBanner(style: .warning, message: ConflictDetector.warning(for: app))
         }
         if let problem = model.problem {
             StatusBanner(style: .error, message: problem, onDismiss: { model.problem = nil })
@@ -185,13 +211,15 @@ struct MenuPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack {
-                Button {
-                    openWindow(id: "hardware-check")
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Text("Hardware Check…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
+                if model.supportsHardwareCheck {
+                    Button {
+                        openWindow(id: "hardware-check")
+                        NSApp.activate(ignoringOtherApps: true)
+                    } label: {
+                        Text("Hardware Check…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
+                    }
+                    Spacer()
                 }
-                Spacer()
                 Button {
                     // A menu bar app must activate first, or the Settings window opens behind other apps.
                     NSApp.activate(ignoringOtherApps: true)
@@ -200,6 +228,7 @@ struct MenuPanel: View {
                     Text("Settings…").frame(minHeight: Theme.minHitTarget).contentShape(Rectangle())
                 }
                 .keyboardShortcut(",")
+                if !model.supportsHardwareCheck { Spacer() }
             }
             Button {
                 NSApplication.shared.terminate(nil)

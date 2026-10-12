@@ -6,17 +6,22 @@ import os
 
 public final class IOHIDTransport: HIDTransport, @unchecked Sendable {
     private let vendorID: Int
+    private let usagePage: Int?
     private let queue = DispatchQueue(label: "mousebar.hid.manager")
     private let devices = OSAllocatedUnfairLock<[UInt64: IOHIDDevice]>(initialState: [:])
 
-    public init(vendorID: Int = 0x1038) {
+    /// `usagePage` narrows the match to one HID usage page (a Logitech receiver exposes several interfaces).
+    public init(vendorID: Int = 0x1038, usagePage: Int? = nil) {
         self.vendorID = vendorID
+        self.usagePage = usagePage
     }
 
     public func events() -> AsyncStream<HIDEvent> {
         AsyncStream { continuation in
             let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-            IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: vendorID] as CFDictionary)
+            var matching: [String: Int] = [kIOHIDVendorIDKey: vendorID]
+            if let usagePage { matching[kIOHIDDeviceUsagePageKey] = usagePage }
+            IOHIDManagerSetDeviceMatching(manager, matching as CFDictionary)
             let context = CallbackContext(transport: self, continuation: continuation)
             let retained = Unmanaged.passRetained(context).toOpaque()
             IOHIDManagerRegisterDeviceMatchingCallback(manager, { ctx, _, _, device in
