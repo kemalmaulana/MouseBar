@@ -18,6 +18,23 @@ jobs:
       - name: Select latest stable Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
 
+      - name: Install Rust (stable, aarch64-apple-darwin)
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Cargo registry, git checkouts and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Rust/mousebar-logi/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Rust/mousebar-logi/Cargo.lock') }}
+
+      - name: Build the Logitech library (Rust xcframework)
+        run: Scripts/build-logi.sh
+
       - name: Build (zero warnings required)
         run: |
           set -o pipefail

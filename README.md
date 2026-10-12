@@ -2,20 +2,40 @@
 
 Unofficial and not affiliated with SteelSeries.
 
-A native Apple Silicon menu bar app for SteelSeries mice: battery level at the top right of the screen and the mouse's settings in a window. It does not use SteelSeries GG.
+A native Apple Silicon menu bar app for SteelSeries mice, and a Logitech G304 on a Lightspeed receiver: battery level at the top right of the screen and the mouse's settings in a window. It does not use SteelSeries GG.
 
 Status: v0.1, early. Hardware-tested so far on one mouse (SteelSeries Prime Mini Wireless, USB cable): enumeration, opening the control interface and reading the battery (matches rivalcfg). Changing settings from the app, the 2.4 GHz dongle, and saving to the mouse's memory are implemented and unit-tested against rivalcfg's byte output but NOT yet verified on hardware. Other mice are untested (the Prime Wireless profile is included but unverified).
 
+Logitech support is NOT yet verified on hardware: the G304 has only been enumerated (the receiver and the mouse were found), never read. See [Logitech mice](#logitech-mice).
+
 ## Build and run
 
+    Scripts/build-logi.sh        # once, and after Rust/ changes: builds Vendor/MouseBarLogi.xcframework
     Scripts/bundle.sh release
     open build/MouseBar.app
 
-Requires macOS 14+, Xcode 27 or Swift 6.4, and an arm64 Mac. To try the UI with a simulated mouse (nothing is sent to a real one), run `open build/MouseBar.app --args --demo`.
+`Scripts/build-logi.sh` must run before any `swift build`, `swift test` or `Scripts/bundle.sh`: `Package.swift` links the Rust library as a binary target, so SwiftPM cannot even load the package without `Vendor/MouseBarLogi.xcframework` (git-ignored). `Scripts/bundle.sh` stops with a message when it is missing.
+
+Requires macOS 14+, Xcode 27 or Swift 6.4, and an arm64 Mac, plus Rust (stable, via [rustup](https://rustup.rs)) for the Logitech library. To try the UI with a simulated mouse (nothing is sent to a real one), run `open build/MouseBar.app --args --demo`.
 
 There is no launch-at-login yet; add the app to System Settings > General > Login Items by hand.
 
 If SteelSeries GG is installed, quit it first and consider uninstalling it: both programs talk to the same device. A battery read can return a report that is not the battery answer while GG's engine runs (seen once; likely GG's traffic). MouseBar ignores such reports on the cable.
+
+## Logitech mice
+
+Supported: the Logitech G304 on its Lightspeed receiver, through [OpenLogi](https://github.com/AprilNEA/OpenLogi)'s HID++ crates. **Not yet verified on hardware.** So far a read-only check only enumerated the receiver (`046d:c53f`) and found the G304 (wpid `4074`) asleep; nothing has been read from it and nothing written. See `docs/superpowers/notes/2026-10-12-logitech-g304-verification.md`.
+
+What it does:
+
+- **Battery** in the menu bar and panel, read from the mouse.
+- **DPI** (Settings) and **polling rate** (Settings and panel). The window shows what the mouse reports (no "Default" tag for those two), and the supported values come from the mouse.
+- **Mouse picker:** with more than one mouse connected (a SteelSeries and a Logitech), the name in the panel header opens a menu to pick which one the menu bar and Settings show. MouseBar remembers the choice.
+- **Conflict banner:** the panel warns if Logitech G HUB, Logi Options+ or the OpenLogi agent was running when MouseBar launched (it checks once). They all talk to the same receiver and fight MouseBar. Quit them first. MouseBar never quits another app for you.
+
+Every DPI or polling rate change is written to the mouse and then read back. If the mouse reports a different value, MouseBar shows an error instead of pretending it worked. The G304 has onboard profiles: in onboard mode the mouse may ignore or override these writes, and the read-back is what shows it. Values you set are meant to be sent again when the mouse reconnects or wakes (implemented, not yet seen on hardware).
+
+To check your own G304 without changing anything, wake it (switch on, fresh AA battery) and run `swift run logiprobe`: it prints the library version, the paired devices, and for each online one its DPI, polling rate and battery. It only reads.
 
 ## Settings
 
@@ -40,4 +60,6 @@ DPI presets (up to 5), polling rate, LED color, button remapping, sleep and dim 
 
 ## Credits
 
-The mouse protocol comes from [rivalcfg](https://github.com/flozz/rivalcfg) by Fabien LOISON (flozz), licensed WTFPL.
+The SteelSeries mouse protocol comes from [rivalcfg](https://github.com/flozz/rivalcfg) by Fabien LOISON (flozz), licensed WTFPL.
+
+The Logitech support uses [OpenLogi](https://github.com/AprilNEA/OpenLogi) by AprilNEA (`MIT OR Apache-2.0`), whose `openlogi-hidpp` crate is a fork of `hidpp` from [logy](https://github.com/lus/logy) by Lukas Schulte Pelkum (0BSD). Licence texts and the Rust dependency list are in `THIRD_PARTY_NOTICES.md`, which is also inside the app bundle (`Contents/Resources`).
