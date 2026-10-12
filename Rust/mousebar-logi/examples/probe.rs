@@ -1,4 +1,4 @@
-//! Read-only hardware probe over the C ABI: prints the version, the device
+//! Hardware probe over the C ABI that changes no mouse setting: prints the version, the device
 //! list, and the settings and battery of every online device.
 //!
 //! It never calls a setter.
