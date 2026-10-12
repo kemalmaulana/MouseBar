@@ -49,6 +49,8 @@ final class AppModel {
     private(set) var logiRevision: String?
     /// True while the hardware check runs; Settings and the panel's quick controls are disabled.
     private(set) var isCheckRunning = false
+    /// `DeviceModel.mouse` of the mouse a running hardware check tests (from its snapshot); nil when no check runs.
+    private var checkedMouse: String?
     /// Set by the hardware check when switching the active DPI preset was confirmed on the mouse.
     private(set) var activePresetConfirmed: Bool
     let layouts: ButtonLayouts
@@ -67,6 +69,8 @@ final class AppModel {
     private var inputs: AsyncStream<Input>.Continuation?
     private var started = false
     private var logiVersionRequested = false
+    /// The banner of the last failed Logitech enumeration, cleared from `problem` once a Logitech mouse arrives.
+    private var receiverProblem: String?
     /// The latest resync per setting key; a newer edit of the same key cancels the older waiter.
     private var resyncTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var saveClearTask: Task<Void, Never>?
@@ -218,12 +222,15 @@ final class AppModel {
         inputs?.yield(.reselect)
     }
 
-    /// Called by the hardware check. When it ends, the preferred mouse is looked at again: it may have connected
-    /// meanwhile, and `selectActive` kept the checked mouse until now.
-    func setCheckRunning(_ running: Bool) {
+    /// Called by the hardware check, with the checked mouse (the snapshot's `DeviceModel.mouse`) when it starts.
+    /// While it runs, `selectActive` only picks that mouse. When it ends, the preferred mouse is looked at again:
+    /// it may have connected meanwhile, and `selectActive` kept the checked mouse (or none) until now.
+    func setCheckRunning(_ running: Bool, mouse: String? = nil) {
         let ended = isCheckRunning && !running
         isCheckRunning = running
-        if ended { inputs?.yield(.reselect) }
+        checkedMouse = running ? mouse : nil
+        // The check starts on its snapshot's mouse; if another one became active in between, switch back (or to none).
+        if ended || (running && activeMouseID != mouse) { inputs?.yield(.reselect) }
     }
 
     /// True when the UI shows the factory default: MouseBar never set the value and the mouse can't report it.
@@ -234,6 +241,11 @@ final class AppModel {
     private func handle(_ event: DeviceEvent) async {
         switch event {
         case .connected(let mouse):
+            // A Logitech mouse arrived, so the receiver answers again: its earlier failure banner is stale.
+            if mouse.model.vendorId == Self.logitechVendorID, let stale = receiverProblem {
+                if problem == stale { problem = nil }
+                receiverProblem = nil
+            }
             // The same mouse again (its settings arrived late): swap it in place, keep its position, and restart
             // only its own session, if it is the active one.
             var replaced: UInt64?
@@ -250,8 +262,17 @@ final class AppModel {
             mice = Self.distinctMice(available)
             await selectActive()
         case .openFailed(let info, let message):
-            problem = "Could not open \(info.product ?? "the mouse"): \(message). "
-                + "If macOS asked for Input Monitoring, allow MouseBar in System Settings → Privacy & Security."
+            if info.vendorID == Self.logitechVendorID {
+                // The Logitech watcher opens no device itself (no Input Monitoring): its enumeration failed or timed
+                // out, often because another Logitech app holds the receiver. The watcher retries on its own.
+                let banner = "Could not read the Logitech receiver: \(message). Quit Logitech G HUB, Logi Options+ "
+                    + "or OpenLogi if they are running, then unplug and replug the receiver."
+                problem = banner
+                receiverProblem = banner
+            } else {
+                problem = "Could not open \(info.product ?? "the mouse"): \(message). "
+                    + "If macOS asked for Input Monitoring, allow MouseBar in System Settings → Privacy & Security."
+            }
         }
     }
 
@@ -264,10 +285,14 @@ final class AppModel {
     }
 
     private func selectActive(restarting replaced: UInt64? = nil) async {
-        // A running hardware check owns its mouse: its test writes must not follow the stored preference to another
-        // one. Only the checked mouse going away (not just its cable or dongle) lets the active mouse change.
-        let checked = isCheckRunning && available.contains { $0.model.mouse == activeMouseID }
-        let chosen = ActiveMousePolicy.choose(from: available, preferred: checked ? activeMouseID : preferredMouse)
+        // A running hardware check owns its mouse: only the checked mouse (over cable or dongle) can be active. With
+        // it gone no mouse is active, so the check waits for it; another mouse never takes over and never gets the
+        // check's connection, battery or values.
+        let chosen = if isCheckRunning, let checkedMouse {
+            ActiveMousePolicy.choose(from: available.filter { $0.model.mouse == checkedMouse }, preferred: nil)
+        } else {
+            ActiveMousePolicy.choose(from: available, preferred: preferredMouse)
+        }
         guard chosen?.hidID != activeID || (replaced != nil && replaced == activeID) else { return }
         for task in resyncTasks.values { task.cancel() }
         resyncTasks = [:]
@@ -307,7 +332,8 @@ final class AppModel {
         if !errors.isEmpty { problem = errors.joined(separator: "\n") }
         if isCheckRunning {
             // The check switched connections (cable <-> dongle): keep its fast battery polling on the new session.
-            await session.setPollInterval(.seconds(5))
+            // Only the checked mouse polls fast (for a Logitech mouse every poll is a full receiver enumeration).
+            if chosen.model.mouse == checkedMouse { await session.setPollInterval(.seconds(5)) }
         } else {
             // A check interrupted by a crash or force quit left a snapshot: put the owner's settings back once.
             await CheckRunner.shared.restoreIfInterrupted()
@@ -382,8 +408,9 @@ final class AppModel {
         }
     }
 
+    /// SteelSeries only: a Logitech mouse has no factory reset here (Device tab offers `forgetSettings` instead).
     func resetAll() {
-        guard let session else { return }
+        guard let session, activeVendorID != Self.logitechVendorID else { return }
         Task {
             do {
                 try await session.resetAll()
@@ -391,6 +418,30 @@ final class AppModel {
             } catch {
                 problem = "Reset failed: \(error)"
             }
+        }
+    }
+
+    /// Logitech's "Forget MouseBar's settings for this mouse": clears what MouseBar stored for the active mouse so it
+    /// is no longer re-applied. Nothing is written to the mouse and nothing is saved; Settings then shows what the
+    /// mouse reports.
+    func forgetSettings() {
+        guard let session, let id = activeID else { return }
+        // A pending resync would put a forgotten optimistic value back on screen.
+        for task in resyncTasks.values { task.cancel() }
+        resyncTasks = [:]
+        problem = nil
+        Task {
+            do {
+                try await session.forgetSavedSettings()
+            } catch {
+                if id == activeID { problem = "Could not forget the settings: \(error)" }
+                return
+            }
+            let current = await session.currentValues
+            let readable = await session.readableKeys
+            guard id == activeID else { return }   // another mouse became active meanwhile
+            values = current
+            readableKeys = readable
         }
     }
 

@@ -132,6 +132,22 @@ public actor MouseSession {
         await debouncer.schedule()
     }
 
+    /// Forgets every value MouseBar stored for this mouse without writing to it or saving: nothing is re-applied on
+    /// the next connect or wake. Then shows what the mouse reports now, like `start` (live values, no "Default" tag).
+    /// For a mouse that reports its settings and has no factory reset MouseBar knows (Logitech).
+    public func forgetSavedSettings() async throws {
+        try await store.clear(mouse: mouse.model.mouse)
+        values = [:]
+        liveOnly = []
+        let live = await mouse.device.readSettings()
+        readableKeys = Set(live.keys)
+        // An edit made while the read was pending is not overwritten.
+        for (key, value) in live where values[key] == nil {
+            values[key] = value
+            liveOnly.insert(key)
+        }
+    }
+
     /// Sends a pending device save now (called when the app quits).
     public func flush() async {
         await debouncer.flush()

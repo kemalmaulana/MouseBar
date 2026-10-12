@@ -6,6 +6,7 @@ struct DeviceTab: View {
     let family: DeviceFamily
     @AppStorage("showPercentage") private var showPercentage = true
     @State private var confirmReset = false
+    @State private var confirmForget = false
     @Environment(\.openWindow) private var openWindow
 
     /// What talks to the mouse, with the version of the data behind it.
@@ -49,12 +50,23 @@ struct DeviceTab: View {
             }
         }
         Section {
-            Button("Reset to factory defaults…", role: .destructive) { confirmReset = true }
-                .confirmationDialog("Reset every setting to the factory default?", isPresented: $confirmReset) {
-                    Button("Reset", role: .destructive) { model.resetAll() }
-                } message: {
-                    Text("Rewrites every setting on the mouse and saves it. Your MouseBar settings are cleared.")
-                }
+            if model.activeVendorID == AppModel.logitechVendorID {
+                // MouseBar knows no factory reset for a Logitech mouse: it only forgets what it stored, and writes nothing.
+                Button("Forget MouseBar's settings for this mouse…", role: .destructive) { confirmForget = true }
+                    .confirmationDialog("Forget MouseBar's settings for this mouse?", isPresented: $confirmForget) {
+                        Button("Forget", role: .destructive) { model.forgetSettings() }
+                    } message: {
+                        Text("MouseBar stops re-applying its saved DPI and polling rate to this mouse. "
+                            + "The mouse keeps its current settings.")
+                    }
+            } else {
+                Button("Reset to factory defaults…", role: .destructive) { confirmReset = true }
+                    .confirmationDialog("Reset every setting to the factory default?", isPresented: $confirmReset) {
+                        Button("Reset", role: .destructive) { model.resetAll() }
+                    } message: {
+                        Text("Rewrites every setting on the mouse and saves it. Your MouseBar settings are cleared.")
+                    }
+            }
         }
     }
 }

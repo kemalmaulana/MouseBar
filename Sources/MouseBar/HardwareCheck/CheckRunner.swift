@@ -133,8 +133,9 @@ final class CheckRunner {
             lastSnapshot = snap
             testWriteMade = false
             outcomes = [.preflight: StepOutcome(step: .preflight, result: .pass, detail: "Settings snapshot saved")]
-            model.setCheckRunning(true)
-            await session.setPollInterval(.seconds(5))
+            // The snapshot's mouse, not `activeMouseID`: another mouse may have become active during the awaits above.
+            model.setCheckRunning(true, mouse: snap.mouse)
+            await pollCheckedMouseFast()
             await runSteps(Array(CheckStepID.allCases.dropFirst()))
         }
     }
@@ -159,8 +160,8 @@ final class CheckRunner {
             }
             snapshot = snap
             testWriteMade = false
-            model.setCheckRunning(true)
-            await session.setPollInterval(.seconds(5))
+            model.setCheckRunning(true, mouse: snap.mouse)
+            await pollCheckedMouseFast()
             await runSteps([step])
         }
     }
@@ -221,6 +222,15 @@ final class CheckRunner {
         } else {
             await restoreAll()
         }
+    }
+
+    /// The check's fast battery polling, on the checked mouse's live session only: the session captured before the
+    /// awaits in `beginTests` / `rerun` may have been replaced by then, and another mouse's session never polls fast.
+    /// When the checked mouse is not active now, `selectActive` sets it on the session it starts for that mouse.
+    private func pollCheckedMouseFast() async {
+        guard let checked = snapshot?.mouse, model.activeMouseID == checked,
+              let session = model.activeSession else { return }
+        await session.setPollInterval(.seconds(5))
     }
 
     // MARK: Step sequencing
