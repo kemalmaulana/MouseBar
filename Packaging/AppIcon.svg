@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- macOS icon grid: 824 x 824 rounded square centred on a 1024 canvas. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#111418"/>
+  <!-- Gauge arc and centre dot, drawn on a 256 grid and scaled into the square. -->
+  <g transform="translate(204.8 204.8) scale(2.4)">
+    <path d="M128 36 A92 92 0 1 1 36 128" fill="none" stroke="#00D1FF" stroke-width="30" stroke-linecap="round"/>
+    <circle cx="128" cy="128" r="22" fill="#00D1FF"/>
+  </g>
+</svg>
