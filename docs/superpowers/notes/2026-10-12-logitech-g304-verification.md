@@ -17,7 +17,7 @@ Wake the G304 (switch it on, fresh AA battery), leave G HUB, Logi Options+ and t
 
     swift run logiprobe
 
-It prints the library version, each paired device, and for each online one its DPI, polling rate and battery. It never calls the DPI or polling-rate setters. Paste the output under "Observed" in the first rows below.
+It prints the library version, each paired device, and for each online one its DPI, polling rate and battery. It never calls the DPI or polling-rate setters. Paste the output into the Result column of the first rows below.
 
 ## Checklist
 
@@ -36,4 +36,4 @@ Run `build/MouseBar.app` normally (no `--demo`) with the receiver plugged in and
 
 ## Open questions for the hardware run
 
-- The G304 has onboard profiles. If a DPI or polling-rate write is read back unchanged, MouseBar reports "The mouse kept N instead of M. Its onboard profile may be in control." Note whether that happens and in which profile mode.
+- The G304 has onboard profiles. If a DPI or polling-rate write is read back unchanged, MouseBar reports "The mouse kept N DPI instead of M. Its onboard profile may be in control." (or "The mouse kept N Hz instead of M. Its onboard profile may be in control.") Note whether that happens and in which profile mode.

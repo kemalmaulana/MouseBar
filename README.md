@@ -2,7 +2,7 @@
 
 Unofficial and not affiliated with SteelSeries.
 
-A native Apple Silicon menu bar app for SteelSeries mice, and a Logitech G304 on a Lightspeed receiver: battery level at the top right of the screen and the mouse's settings in a window. It does not use SteelSeries GG.
+A native Apple Silicon menu bar app for SteelSeries mice, and a Logitech G304 on a Lightspeed receiver (Logitech: untested on hardware): battery level at the top right of the screen and the mouse's settings in a window. It does not use SteelSeries GG.
 
 Status: v0.1, early. Hardware-tested so far on one mouse (SteelSeries Prime Mini Wireless, USB cable): enumeration, opening the control interface and reading the battery (matches rivalcfg). Changing settings from the app, the 2.4 GHz dongle, and saving to the mouse's memory are implemented and unit-tested against rivalcfg's byte output but NOT yet verified on hardware. Other mice are untested (the Prime Wireless profile is included but unverified).
 
@@ -24,9 +24,9 @@ If SteelSeries GG is installed, quit it first and consider uninstalling it: both
 
 ## Logitech mice
 
-Supported: the Logitech G304 on its Lightspeed receiver, through [OpenLogi](https://github.com/AprilNEA/OpenLogi)'s HID++ crates. **Not yet verified on hardware.** So far a read-only check only enumerated the receiver (`046d:c53f`) and found the G304 (wpid `4074`) asleep; nothing has been read from it and nothing written. See `docs/superpowers/notes/2026-10-12-logitech-g304-verification.md`.
+Supported: the Logitech G304 on its Lightspeed receiver, through [OpenLogi](https://github.com/AprilNEA/OpenLogi)'s HID++ crates. **Not yet verified on hardware.** So far a read-only check only enumerated the receiver (`046d:c53f`) and found the G304 (wpid `4074`) offline (asleep or off); nothing has been read from it and nothing written. See `docs/superpowers/notes/2026-10-12-logitech-g304-verification.md`.
 
-What it does:
+What it is built to do (none of it seen on a real G304 yet):
 
 - **Battery** in the menu bar and panel, read from the mouse.
 - **DPI** (Settings) and **polling rate** (Settings and panel). The window shows what the mouse reports (no "Default" tag for those two), and the supported values come from the mouse.
@@ -51,11 +51,12 @@ DPI presets (up to 5), polling rate, LED color, button remapping, sleep and dim 
 - **Menu bar:** battery symbol and percentage (hide the percentage in Settings → Device). It may turn red when low (tint not yet verified in the menu bar) and shows a moon while the mouse sleeps.
 - **Panel:** click the menu bar item for the mouse, its connection (Cable or 2.4 GHz), a battery gauge, quick polling-rate and LED controls, warnings, and "Saving to mouse… / Saved to mouse" feedback. A DPI switch appears once the hardware check has confirmed that the mouse accepts an active-preset change.
 - **Settings (⌘,):** tabs for Performance (DPI presets, polling rate), Buttons (diagram plus per-button actions, including media and keyboard keys), Lighting, Power, and Device (info, Hardware Check, reset). A "Default" tag marks values MouseBar has never set.
-- **Hardware Check:** from the panel or Settings → Device. It walks you through 9 short steps on your real mouse (battery over cable and dongle, LED, polling rate, buttons, DPI, saving, wake) and writes a Markdown report to `~/Library/Application Support/MouseBar/reports/`. MouseBar puts back the settings it has stored and the DPI presets and button remaps you enter here. Everything else goes back to factory defaults, and the active DPI preset becomes preset 1. This happens when it finishes, when you cancel or quit, or at the next launch after a crash (not yet verified on hardware).
+- **Hardware Check** (SteelSeries mice only; it is not offered for a Logitech mouse): from the panel or Settings → Device. It walks you through 9 short steps on your real mouse (battery over cable and dongle, LED, polling rate, buttons, DPI, saving, wake) and writes a Markdown report to `~/Library/Application Support/MouseBar/reports/`. MouseBar puts back the settings it has stored and the DPI presets and button remaps you enter here. Everything else goes back to factory defaults, and the active DPI preset becomes preset 1. This happens when it finishes, when you cancel or quit, or at the next launch after a crash (not yet verified on hardware).
 
 ## Tools
 
 - `swift run hidprobe list | battery | dpi <index>`: diagnose what macOS shows and what the mouse answers. `list` and `battery` do not change settings (`battery` sends a query packet). `dpi <index>` WRITES the default presets 400/800/1200/2400/3200 to the mouse's working memory without saving; a later MouseBar save can store them, so power-cycle the mouse afterwards.
+- `Scripts/gen-notices.sh`: rewrites the Rust dependency table and licence texts in `THIRD_PARTY_NOTICES.md` from `cargo metadata` (needs the crates' sources in `~/.cargo`, i.e. one earlier `Scripts/build-logi.sh`). The sections above the marker line in that file are hand-written.
 - `Tools/gen_profiles.py`: regenerates `Sources/MouseCore/Generated/GeneratedProfiles.swift` and the test vectors from rivalcfg 4.17.0 (`python3 -m venv .venv && .venv/bin/pip install -r Tools/requirements.txt && .venv/bin/python -I Tools/gen_profiles.py`).
 
 ## Credits
