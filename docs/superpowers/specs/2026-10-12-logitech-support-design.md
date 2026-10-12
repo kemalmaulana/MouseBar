@@ -22,7 +22,7 @@ Non-goals: button remapping, lighting, onboard profiles, SmartShift, Bluetooth-o
 
 - OpenLogi `0f69d75be99439da97291ff4163aba83dfc6df96` (v0.8.13) is a CLI, a background agent and a GUI; it has no API for other apps. Its crates are usable as libraries: `openlogi-hid` (host functions: `enumerate()`, `get_dpi_info(route)`, `set_dpi(route, dpi)`, transport over IOKit), `openlogi-core` (types: `DeviceInventory`, `PairedDevice { slot, codename, wpid, kind, online, battery, capabilities, … }`, `DeviceRoute`, `DpiInfo { current, capabilities }` where capabilities is a sorted list of supported values), `openlogi-hidpp` (features, including `ReportRateFeature` `0x8060`: `get_report_rate_list`, `get_report_rate`, `set_report_rate(ms)`). All inventory types derive `Serialize`.
 - Lightspeed receivers use the Unifying protocol path: route `DeviceRoute::Unifying { receiver_uid, slot }`.
-- `openlogi list` (read-only) on the owner's Mac: `Lightspeed Receiver (vid=046d pid=c53f)`, `slot 1 ○ Unknown device (mouse, wpid=4074, battery=—)`. `○` means `online: false`: the mouse was asleep or off for two minutes of polling, so battery, DPI and report rate are **not yet read on hardware**.
+- `openlogi list` (changes no mouse setting) on the owner's Mac: `Lightspeed Receiver (vid=046d pid=c53f)`, `slot 1 ○ Unknown device (mouse, wpid=4074, battery=—)`. `○` means `online: false`: the mouse was asleep or off for two minutes of polling, so battery, DPI and report rate are **not yet read on hardware**.
 - OpenLogi's registry has no name for wpid `0x4074`; MouseBar names it.
 - Only one program should drive a receiver at a time: G HUB, Logi Options+, Solaar and the OpenLogi agent conflict.
 - Building OpenLogi's CLI took about 4 minutes on this Mac (Rust 1.99; OpenLogi needs 1.98+).
@@ -66,7 +66,7 @@ A protocol for one connected mouse, with exactly what `MouseSession`, `BatteryMo
 - Hardware Check is SteelSeries-only: hidden for a Logitech mouse.
 - Conflict banner: G HUB (`lghub`, `lghub_agent`, `lghub_updater`), Logi Options+ (`logioptionsplus_agent`) or the OpenLogi agent (`openlogi-agent`) running.
 - `--demo` adds a simulated Logitech G304 (no FFI calls), so the picker and the Logitech UI can be driven without hardware. The real watcher never starts in demo mode.
-- A read-only `logiprobe` executable prints the FFI's enumerate and settings JSON for the hardware check of this feature.
+- A `logiprobe` executable that changes no mouse setting prints the FFI's enumerate and settings JSON for the hardware check of this feature.
 
 ### 3.5 Build, CI, release
 
@@ -77,13 +77,13 @@ A protocol for one connected mouse, with exactly what `MouseSession`, `BatteryMo
 
 - Logitech writes happen only when the owner changes DPI or report rate in Settings, or when MouseBar re-applies a value the owner set before. Nothing is written on first connect of an unknown mouse.
 - Every write is read back; a mismatch raises an error banner.
-- No Logitech write is run on hardware during implementation. Read-only calls (`enumerate`, settings and battery reads) are allowed.
+- No Logitech write is run on hardware during implementation. Calls that change no mouse setting are allowed: settings and battery reads, and `enumerate`. `enumerate` is not strictly read-only: like Solaar, it asks the receiver to re-announce its devices (OpenLogi sets the receiver's wireless-notification flag, register `0x00`, read-modify-write in receiver RAM, and triggers device-arrival notifications through register `0x02`).
 - SteelSeries safety rules stay in force.
 
 ## 5. Verification
 
 - `Scripts/build-logi.sh` succeeds; `swift build --arch arm64` with zero warnings; `swift test` 106 pass; `--demo` launch with the simulated G304 selectable.
-- Owner hardware run (read-only first): `logiprobe` with the G304 awake shows battery, DPI and report rate. Writes after that, with the owner's go-ahead. Results go in `docs/superpowers/notes/2026-10-12-logitech-g304-verification.md`.
+- Owner hardware run (no mouse setting changed first): `logiprobe` with the G304 awake shows battery, DPI and report rate. Writes after that, with the owner's go-ahead. Results go in `docs/superpowers/notes/2026-10-12-logitech-g304-verification.md`.
 
 ## 6. Risks
 

@@ -71,6 +71,169 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
+## Rust crates that ship no licence file
+
+These crates are linked into MouseBar through `Rust/mousebar-logi`, but their crates.io source has no licence file (the generated list at the end of this file names them). The texts below were fetched from each upstream repository on 2026-10-12 (`gh api repos/<owner>/<repo>/contents/<path>`). The proc-macro crates `kinded_macros`, `nutype_macros` and `rust-i18n-macro` from the same repositories run only at build time and are not part of the app.
+
+### objc2, objc2-encode, block2, dispatch2, objc2-core-foundation, objc2-io-kit
+
+From [objc2](https://github.com/madsmtm/objc2) by Mads Marquart. objc2 0.6.5, objc2-encode 4.1.0 and block2 0.6.2 are licensed MIT. dispatch2 0.3.1, objc2-core-foundation 0.3.2 and objc2-io-kit 0.3.2 are licensed `Zlib OR Apache-2.0 OR MIT`; MouseBar uses them under the MIT licence.
+
+The release tags of these versions (`objc2-0.6.5`, `objc2-encode-4.1.0`, `block2-0.6.2`, `dispatch2-0.3.1`, `frameworks-0.3.2`) carry only `LICENSE.md`, the same file at all five tags. It names the licences and links to their texts:
+
+```
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+```
+
+No tag has the full MIT text. The text below is `LICENSE-MIT.txt` from the default branch `main` at commit `7cd66b184fe026e8807d25609226f82521af916d`; the file was added there in March 2026, after these releases:
+
+```
+Copyright 2026 Mads Marquart
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### kinded, nutype
+
+From [kinded](https://github.com/greyblake/kinded) (kinded 0.5.1) and [nutype](https://github.com/greyblake/nutype) (nutype 0.7.0) by Serhii Potapov, both licensed MIT. nutype's `LICENSE-MIT` at tag `v0.7.0` has no copyright line. kinded's repository has no licence file at all (checked at tag `v0.5.0`, its newest tag, and on the default branch). The copyright line below is taken from both crates' READMEs ("MIT © Serhii Potapov") and their `authors` field; the licence text is nutype's `LICENSE-MIT` at tag `v0.7.0`:
+
+```
+Copyright (c) Serhii Potapov
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### rust-i18n-support
+
+From [rust-i18n](https://github.com/longbridge/rust-i18n) by Longbridge: rust-i18n-support 4.2.4, licensed MIT. `LICENSE` at tag `v4.2.4`:
+
+```
+MIT License
+
+Copyright (c) 2021 Longbridge
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### fluent-langneg
+
+From [fluent-langneg-rs](https://github.com/projectfluent/fluent-langneg-rs) (Project Fluent): fluent-langneg 0.14.2, licensed `Apache-2.0 OR MIT`; MouseBar uses it under the MIT licence. The repository has no tag for 0.14.2. The text below is `LICENSE-MIT` at the release commit `a161fed4c028436d5584ccadf77c799a65c16232` ("chore: Release 0.14.2"), unchanged on the default branch `main`:
+
+```
+Copyright Mozilla Foundation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 <!-- gen-notices: everything below this line is generated by Scripts/gen-notices.sh; edit above it only -->
 
 ## Rust dependency tree of `Rust/mousebar-logi`
@@ -6428,7 +6591,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Crates without a licence file
 
-These crates ship no licence file in their source. Their declared licence and repository are:
+These crates ship no licence file in their source. Their declared licence and repository are below. The licence texts of those linked into MouseBar, fetched from upstream, are in the hand-written section "Rust crates that ship no licence file" near the top of this file.
 
 - block2 0.6.2: MIT, https://github.com/madsmtm/objc2
 - dispatch2 0.3.1: Zlib OR Apache-2.0 OR MIT, https://github.com/madsmtm/objc2

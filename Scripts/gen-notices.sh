@@ -137,7 +137,9 @@ if without_text:
     out += [
         "## Crates without a licence file",
         "",
-        "These crates ship no licence file in their source. Their declared licence and repository are:",
+        "These crates ship no licence file in their source. Their declared licence and repository are below. "
+        "The licence texts of those linked into MouseBar, fetched from upstream, are in the hand-written section "
+        "\"Rust crates that ship no licence file\" near the top of this file.",
         "",
     ]
     for crate in without_text:

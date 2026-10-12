@@ -6,18 +6,18 @@ Logitech support is **not verified on hardware**. The G304 has only been enumera
 
 ## What was observed
 
-- From a read-only spike on 2026-10-12, OpenLogi's CLI `openlogi list` printed `Lightspeed Receiver (vid=046d pid=c53f)` and `slot 1 ○ Unknown device (mouse, wpid=4074, battery=—)`. `○` means offline. The G304 stayed offline for 2 minutes of polling.
+- From a spike on 2026-10-12 that changed no mouse setting, OpenLogi's CLI `openlogi list` printed `Lightspeed Receiver (vid=046d pid=c53f)` and `slot 1 ○ Unknown device (mouse, wpid=4074, battery=—)`. `○` means offline. The G304 stayed offline for 2 minutes of polling.
 - The owner has no AA battery for the G304 right now, so it cannot be woken yet.
 - During Tasks 1-2 of the implementation the whole USB hub was unplugged, so `logiprobe` saw 0 devices.
 - Every other row below was NOT RUN.
 
-## Run this first (read-only)
+## Run this first (changes no mouse setting)
 
 Wake the G304 (switch it on, fresh AA battery), leave G HUB, Logi Options+ and the OpenLogi agent quit, then:
 
     swift run logiprobe
 
-It prints the library version, each paired device, and for each online one its DPI, polling rate and battery. It never calls the DPI or polling-rate setters. Paste the output into the Result column of the first rows below.
+It prints the library version, each paired device, and for each online one its DPI, polling rate and battery. It never calls the DPI or polling-rate setters and changes no mouse setting. It is not strictly read-only: like Solaar, OpenLogi's enumeration asks the receiver to re-announce its devices (it sets the receiver's wireless-notification flag, register `0x00`, read-modify-write in the receiver's RAM, and triggers device-arrival notifications through register `0x02`). A failed settings or battery read is printed for that device and the probe goes on. Paste the output into the Result column of the first rows below.
 
 ## Checklist
 
@@ -25,7 +25,7 @@ Run `build/MouseBar.app` normally (no `--demo`) with the receiver plugged in and
 
 | Check | Expected | Result |
 |---|---|---|
-| Enumerate | The Lightspeed receiver is found and the G304 appears in its slot with wpid `4074` | PARTIAL (read-only, `openlogi list`): receiver `046d:c53f` found; G304 at slot 1, wpid `4074`, offline (asleep or off). `logiprobe` has not seen it online. |
+| Enumerate | The Lightspeed receiver is found and the G304 appears in its slot with wpid `4074` | PARTIAL (`openlogi list`, no mouse setting changed): receiver `046d:c53f` found; G304 at slot 1, wpid `4074`, offline (asleep or off). `logiprobe` has not seen it online. |
 | Battery | `logiprobe` and the menu bar show a percentage, charging state if any | NOT RUN: the G304 was offline and the owner has no AA battery to wake it |
 | DPI read | `logiprobe` prints the current DPI and the supported values | NOT RUN: the G304 was offline |
 | Report rate read | `logiprobe` prints the current rate and the supported rates | NOT RUN: the G304 was offline |
